@@ -1,0 +1,21 @@
+[workspace]
+members = [".", "xdp_module"]
+
+[package]
+name = "firewall"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vladislav.melnik@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+structopt = "0.3"
+
+libc = "0.2"
+tokio = { version = "0.2", features = ["signal", "time", "rt-core", "macros"] }
+redbpf = { path = "redbpf/redbpf", features = ["load"] }
+futures = "0.3"
+
+xdp_module = { path = "xdp_module" }
+
+[build-dependencies]
+cargo-bpf = { path = "redbpf/cargo-bpf", default-features = false, features = ["build"] }
