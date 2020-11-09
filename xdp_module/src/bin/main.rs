@@ -2,32 +2,18 @@
 #![no_main]
 
 use redbpf_probes::xdp::prelude::*;
-use redbpf_probes::{bindings, helpers};
-use xdp_module::{Endpoint, EndpointPair, PowEvent, ConnectionState, Validity};
-use blake2::{
-    Blake2b,
-    digest::{
-        Digest, FixedOutputDirty,
-        generic_array::{GenericArray, typenum},
-    },
-};
+use xdp_module::{Endpoint, EndpointPair, Event, Status};
 
 program!(0xFFFFFFFE, "GPL");
 
-#[map("pow_events")]
-static mut pow_events: PerfMap<PowEvent> = PerfMap::with_max_entries(0x100);
+#[map("events")]
+static mut events: PerfMap<Event> = PerfMap::with_max_entries(0x100);
 
-#[map("connections")]
-static mut connections: HashMap<EndpointPair, ConnectionState> = HashMap::with_max_entries(0x100);
+#[map("list")]
+static mut list: HashMap<[u8; 4], Status> = HashMap::with_max_entries(0x100);
 
-#[map("hasher_state")]
-static mut hasher_state: bindings::bpf_map_def = bindings::bpf_map_def {
-    type_: bindings::bpf_map_type_BPF_MAP_TYPE_ARRAY,
-    key_size: core::mem::size_of::<u32>() as u32,
-    value_size: core::mem::size_of::<Blake2b>() as u32,
-    max_entries: 1,
-    map_flags: 0,
-};
+#[map("status")]
+static mut status_map: HashMap<EndpointPair, Status> = HashMap::with_max_entries(0x10000);
 
 #[xdp]
 pub fn firewall(ctx: XdpContext) -> XdpResult {
@@ -37,11 +23,11 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
         let tcp = unsafe { &*tcp_ptr };
 
         let pair = EndpointPair {
-            source: Endpoint {
+            remote: Endpoint {
                 ipv4: ipv4.saddr.to_be_bytes(),
                 port: tcp.source.to_be_bytes(),
             },
-            destination: Endpoint {
+            local: Endpoint {
                 ipv4: ipv4.daddr.to_be_bytes(),
                 port: tcp.dest.to_be_bytes(),
             },
@@ -49,70 +35,42 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
 
         let headers_length = 14 + (((*ipv4).ihl() * 4) as usize) + (((*tcp).doff() * 4) as usize);
 
-        if tcp.syn() != 0 {
-            let event = PowEvent {
-                pair: pair,
-                valid: Validity::NotChecked,
-            };
-            unsafe { pow_events.insert(&ctx, &MapData::new(event)) };
-        } else {
-            if let Some(_c) = unsafe { connections.get_mut(&pair) } {
-            } else {
-                let mut valid = false;
-                if headers_length + 60 <= ctx.data_end() - ctx.data_start() {
-                    let offset = ctx.data_start() + headers_length;
-                    if let Ok(data) = unsafe { ctx.ptr_at::<[u8; 60]>(offset) } {
-                        let data = unsafe { &*data };
-
-                        let hash_full = unsafe {
-                            let mut full = GenericArray::<u8, typenum::U64>::default();
-
-                            let key = 0;
-                            let state = unsafe {
-                                helpers::bpf_map_update_elem(
-                                    &mut hasher_state as *mut _ as *mut c_void,
-                                    &key as *const _ as *const c_void,
-                                    &Blake2b::default() as *const _ as *const c_void,
-                                    bindings::BPF_ANY.into(),
-                                );
-
-                                let st = helpers::bpf_map_lookup_elem(
-                                    &mut hasher_state as *mut _ as *mut c_void,
-                                    &key as *const _ as *const c_void,
-                                ) as *mut Blake2b;
-                                &mut *st
-                            };
-
-                            state.update(&data[4..60]);
-                            state.finalize_into_dirty(&mut full);
-                            full
-                        };
-
-                        // 3 bytes = 24 bits, pow complexity is 24,
-                        // TODO: make complexity configurable
-                        valid =
-                            hash_full[0x1f] == 0 && hash_full[0x1e] == 0 && hash_full[0x1d] == 0;
-                    }
-                }
-
-                let state = ConnectionState {
-                    valid,
-                    padding: [0; 3],
-                };
-                unsafe { connections.set(&pair, &state) };
-
-                let event = PowEvent {
-                    pair: pair,
-                    valid: if valid {
-                        Validity::Valid
-                    } else {
-                        Validity::Invalid
-                    },
-                };
-                unsafe { pow_events.insert(&ctx, &MapData::new(event)) };
+        if headers_length < ctx.data_end() - ctx.data_start() {
+            let offset = ctx.data_start() + headers_length;
+            if let Ok(data) = unsafe { ctx.ptr_at::<[u8; 60]>(offset) } {
+                let _ = unsafe { &*data };
             }
         }
-    }
 
-    Ok(XdpAction::Pass)
+        // retrieve the status for given remote ip
+        let status = match unsafe { list.get(&pair.remote.ipv4) } {
+            Some(st) => st.clone(),
+            // it is blacklist, allow if nothing in the list
+            _ => Status::Allowed,
+        };
+
+        unsafe {
+            match status_map.get(&pair) {
+                // status is the same, do nothing
+                Some(st) if status.eq(st) => (),
+                // status is changed, update status in status map and notify the userspace
+                _ => {
+                    status_map.set(&pair, &status);
+                    let event = Event {
+                        pair: pair,
+                        new_status: status.clone(),
+                    };
+                    events.insert(&ctx, &MapData::new(event));
+                }
+            }
+        }
+
+        match status {
+            Status::Allowed => Ok(XdpAction::Pass),
+            Status::Blocked => Ok(XdpAction::Drop),
+        }
+    } else {
+        // not TCP
+        Ok(XdpAction::Pass)
+    }
 }

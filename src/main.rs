@@ -1,15 +1,15 @@
 //#![forbid(unsafe_code)]
 
 use structopt::StructOpt;
-use xdp_module::PowEvent;
+use xdp_module::{Event, Status};
 
-use futures::stream::StreamExt;
+use futures::{stream::{StreamExt, Stream}, channel::mpsc};
 use redbpf::{
-    load::{Loaded, Loader},
+    load::{Loader, map_io::PerfMessageStream},
     xdp::Flags,
+    HashMap,
 };
-use std::env;
-use std::ptr;
+use std::{env, ptr, convert::TryInto};
 use tokio::signal;
 
 #[derive(StructOpt)]
@@ -20,16 +20,19 @@ struct Opts {
         help = "Interface name to attach the firewall"
     )]
     device: String,
+    #[structopt(short)]
+    block: Vec<String>,
 }
 
-fn start_event_handler(mut loaded: Loaded) {
+fn start_event_handler(events: mpsc::UnboundedReceiver<(String, <PerfMessageStream as Stream>::Item)>) {
     tokio::spawn(async move {
-        while let Some((name, events)) = loaded.events.next().await {
+        let mut events = events;
+        while let Some((name, events)) = events.next().await {
             for event in events {
                 match name.as_str() {
-                    "pow_events" => {
-                        let event = unsafe { ptr::read(event.as_ptr() as *const PowEvent) };
-                        println!("{:?}", event);
+                    "events" => {
+                        let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
+                        println!("{:x?}", event);
                     },
                     unknown => eprintln!("warning: ignored unknown event: {}", unknown),
                 }
@@ -52,7 +55,19 @@ async fn main() {
             .expect(&format!("error attaching xdp program {}", kp.name()));
     }
 
-    start_event_handler(loaded);
+    start_event_handler(loaded.events);
+
+    let module = loaded.module;
+    if let Some(base) = module.maps.iter().find(|m| m.name == "list") {
+        let map = HashMap::<[u8; 4], Status>::new(base).unwrap();
+        for block in opts.block {
+            let block: String = block;
+            let ip = block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().collect::<Vec<_>>();
+            map.set(ip.try_into().unwrap(), Status::Blocked);
+        }
+    } else {
+        eprintln!("warning: 'list' not found");
+    }
 
     signal::ctrl_c().await.unwrap();
 }

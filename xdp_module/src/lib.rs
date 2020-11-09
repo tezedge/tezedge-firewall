@@ -2,8 +2,8 @@
 
 #[derive(Debug, Clone)]
 pub struct EndpointPair {
-    pub source: Endpoint,
-    pub destination: Endpoint,
+    pub remote: Endpoint,
+    pub local: Endpoint,
 }
 
 #[derive(Clone)]
@@ -12,23 +12,17 @@ pub struct Endpoint {
     pub port: [u8; 2],
 }
 
-#[derive(Debug)]
-pub struct PowEvent {
+#[derive(Debug, Clone)]
+pub struct Event {
     pub pair: EndpointPair,
-    pub valid: Validity,
+    pub new_status: Status,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[repr(u32)]
-pub enum Validity {
-    NotChecked,
-    Valid,
-    Invalid,
-}
-
-pub struct ConnectionState {
-    pub valid: bool,
-    pub padding: [u8; 3],
+pub enum Status {
+    Allowed,
+    Blocked,
 }
 
 mod implementations {
@@ -38,8 +32,8 @@ mod implementations {
     impl From<EndpointPair> for [u8; 12] {
         fn from(v: EndpointPair) -> Self {
             let mut r = [0; 12];
-            r[0..6].clone_from_slice(<[u8; 6]>::from(v.source).as_ref());
-            r[6..12].clone_from_slice(<[u8; 6]>::from(v.destination).as_ref());
+            r[0..6].clone_from_slice(<[u8; 6]>::from(v.local).as_ref());
+            r[6..12].clone_from_slice(<[u8; 6]>::from(v.remote).as_ref());
             r
         }
     }
@@ -47,8 +41,8 @@ mod implementations {
     impl From<[u8; 20]> for EndpointPair {
         fn from(r: [u8; 20]) -> Self {
             EndpointPair {
-                source: <[u8; 6]>::try_from(&r[0..6]).unwrap().into(),
-                destination: <[u8; 6]>::try_from(&r[6..12]).unwrap().into(),
+                local: <[u8; 6]>::try_from(&r[0..6]).unwrap().into(),
+                remote: <[u8; 6]>::try_from(&r[6..12]).unwrap().into(),
             }
         }
     }

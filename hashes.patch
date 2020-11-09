@@ -380,6 +380,214 @@ index 57d276b..c9b1c14 100644
  
  [dev-dependencies]
  digest = { version = "0.9", features = ["dev"] }
+diff --git a/blake2/src/blake2.rs b/blake2/src/blake2.rs
+index 4091365..1521c31 100644
+--- a/blake2/src/blake2.rs
++++ b/blake2/src/blake2.rs
+@@ -22,6 +22,7 @@ macro_rules! blake2_impl {
+         pub struct $state {
+             m: [$word; 16],
+             h: [$vec; 2],
++            v: [$vec; 4],
+             t: u64,
+             n: usize,
+ 
+@@ -73,16 +74,63 @@ macro_rules! blake2_impl {
+         }
+ 
+         impl $state {
++            #[inline(always)]
++            #[doc(hidden)]
++            pub const fn empty() -> Self {
++                let output_size = $bytes::USIZE;
++                let kk = 0;
++
++                let mut p = [0 as $word; 8];
++                p[0] = 0x0101_0000 ^ ((kk as $word) << 8) ^
++                    (output_size as $word);
++
++                p[4] = 0;
++                p[5] = 0;
++                p[6] = 0;
++                p[7] = 0;
++
++                let mut state = {
++                    let nn = p[0] as u8 as usize;
++    
++                    let h0 = [
++                        $vec::new($IV[0] ^ p[0], $IV[1] ^ p[1], $IV[2] ^ p[2], $IV[3] ^ p[3]),
++                        $vec::new($IV[4] ^ p[4], $IV[5] ^ p[5], $IV[6] ^ p[6], $IV[7] ^ p[7]),
++                    ];
++    
++                    $state {
++                        m: [0; 16],
++                        h: h0,
++                        v: [$vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0)],
++                        t: 0,
++                        n: nn,
++    
++                        t0: 0,
++                        m0: [0; 16],
++                        h0,
++                    }    
++                };
++
++                if kk > 0 {
++                    state.t = 2 * ($bytes::USIZE as u64);
++                }
++
++                state.t0 = state.t;
++                state.m0 = state.m;
++                state
++            }
++
+             /// Creates a new hashing context with a key.
+             ///
+             /// **WARNING!** If you plan to use it for variable output MAC, then
+             /// make sure to compare codes in constant time! It can be done
+             /// for example by using `subtle` crate.
++            #[inline(always)]
+             pub fn new_keyed(key: &[u8], output_size: usize) -> Self {
+                 Self::with_params(key, &[], &[], output_size)
+             }
+ 
+             /// Creates a new hashing context with the full set of sequential-mode parameters.
++            #[inline(always)]
+             pub fn with_params(key: &[u8], salt: &[u8], persona: &[u8], output_size: usize) -> Self {
+                 let kk = key.len();
+                 assert!(kk <= $bytes::to_usize());
+@@ -137,6 +185,7 @@ macro_rules! blake2_impl {
+             }
+ 
+             #[doc(hidden)]
++            #[inline(always)]
+             pub fn with_parameter_block(p: &[$word; 8]) -> Self {
+                 let nn = p[0] as u8 as usize;
+                 let kk = (p[0] >> 8) as u8 as usize;
+@@ -151,6 +200,7 @@ macro_rules! blake2_impl {
+                 $state {
+                     m: [0; 16],
+                     h: h0,
++                    v: [$vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0), $vec::new(0, 0, 0, 0)],
+                     t: 0,
+                     n: nn,
+ 
+@@ -161,6 +211,7 @@ macro_rules! blake2_impl {
+             }
+ 
+             /// Updates the hashing context with more data.
++            #[inline(always)]
+             fn update(&mut self, data: &[u8]) {
+                 let mut rest = data;
+ 
+@@ -200,11 +251,13 @@ macro_rules! blake2_impl {
+             }
+ 
+             #[doc(hidden)]
++            #[inline(always)]
+             pub fn finalize_last_node(mut self) -> Output {
+                 self.finalize_with_flag(!0)
+             }
+ 
+ 
++            #[inline(always)]
+             fn finalize_with_flag(&mut self, f1: $word) -> Output {
+                 let off = self.t as usize % (2 * $bytes::to_usize());
+                 if off != 0 {
+@@ -220,6 +273,7 @@ macro_rules! blake2_impl {
+                 out
+             }
+ 
++            #[inline(always)]
+             fn compress(&mut self, f0: $word, f1: $word) {
+                 use $crate::consts::SIGMA;
+ 
+@@ -233,30 +287,30 @@ macro_rules! blake2_impl {
+                     _  => unreachable!(),
+                 };
+ 
+-                let mut v = [
++                self.v = [
+                     h[0],
+                     h[1],
+                     iv0(),
+                     iv1() ^ $vec::new(t0, t1, f0, f1),
+                 ];
+ 
+-                round(&mut v, m, &SIGMA[0]);
+-                round(&mut v, m, &SIGMA[1]);
+-                round(&mut v, m, &SIGMA[2]);
+-                round(&mut v, m, &SIGMA[3]);
+-                round(&mut v, m, &SIGMA[4]);
+-                round(&mut v, m, &SIGMA[5]);
+-                round(&mut v, m, &SIGMA[6]);
+-                round(&mut v, m, &SIGMA[7]);
+-                round(&mut v, m, &SIGMA[8]);
+-                round(&mut v, m, &SIGMA[9]);
++                round(&mut self.v, m, &SIGMA[0]);
++                round(&mut self.v, m, &SIGMA[1]);
++                round(&mut self.v, m, &SIGMA[2]);
++                round(&mut self.v, m, &SIGMA[3]);
++                round(&mut self.v, m, &SIGMA[4]);
++                round(&mut self.v, m, &SIGMA[5]);
++                round(&mut self.v, m, &SIGMA[6]);
++                round(&mut self.v, m, &SIGMA[7]);
++                round(&mut self.v, m, &SIGMA[8]);
++                round(&mut self.v, m, &SIGMA[9]);
+                 if $bytes::to_u8() == 64 {
+-                    round(&mut v, m, &SIGMA[0]);
+-                    round(&mut v, m, &SIGMA[1]);
++                    round(&mut self.v, m, &SIGMA[0]);
++                    round(&mut self.v, m, &SIGMA[1]);
+                 }
+ 
+-                h[0] = h[0] ^ (v[0] ^ v[2]);
+-                h[1] = h[1] ^ (v[1] ^ v[3]);
++                h[0] = h[0] ^ (self.v[0] ^ self.v[2]);
++                h[1] = h[1] ^ (self.v[1] ^ self.v[3]);
+             }
+         }
+ 
+@@ -313,10 +367,17 @@ macro_rules! blake2_impl {
+ 
+         impl $fix_state {
+             /// Creates a new hashing context with the full set of sequential-mode parameters.
++            #[inline(always)]
+             pub fn with_params(key: &[u8], salt: &[u8], persona: &[u8]) -> Self {
+                 let state = $state::with_params(key, salt, persona, $bytes::to_usize());
+                 Self { state }
+             }
++
++            #[inline(always)]
++            #[doc(hidden)]
++            pub const fn empty() -> Self {
++                Self { state: $state::empty() }
++            }
+         }
+ 
+         impl Default for $fix_state {
+diff --git a/blake2/src/consts.rs b/blake2/src/consts.rs
+index ab76c0e..c73d6f4 100644
+--- a/blake2/src/consts.rs
++++ b/blake2/src/consts.rs
+@@ -15,7 +15,7 @@ pub static SIGMA: [[usize; 16]; 12] = [
+     [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
+ ];
+ 
+-pub static BLAKE2B_IV: [u64; 8] = [
++pub const BLAKE2B_IV: [u64; 8] = [
+     0x6a09e667f3bcc908,
+     0xbb67ae8584caa73b,
+     0x3c6ef372fe94f82b,
+@@ -34,7 +34,7 @@ pub const BLAKE2B_SALTBYTES : usize = 16;
+ pub const BLAKE2B_PERSONALBYTES : usize = 16;
+ */
+ 
+-pub static BLAKE2S_IV: [u32; 8] = [
++pub const BLAKE2S_IV: [u32; 8] = [
+     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+ ];
+ 
 diff --git a/blake2/src/lib.rs b/blake2/src/lib.rs
 index 28cb1d9..dbdff1f 100644
 --- a/blake2/src/lib.rs
@@ -393,3 +601,16 @@ index 28cb1d9..dbdff1f 100644
  #[cfg(feature = "std")]
  extern crate std;
  
+diff --git a/blake2/src/simd/simdty.rs b/blake2/src/simd/simdty.rs
+index 008b8b4..384857b 100644
+--- a/blake2/src/simd/simdty.rs
++++ b/blake2/src/simd/simdty.rs
+@@ -65,7 +65,7 @@ pub type u8x32 = Simd32<u8>;
+ 
+ impl<T> Simd4<T> {
+     #[inline(always)]
+-    pub fn new(e0: T, e1: T, e2: T, e3: T) -> Simd4<T> {
++    pub const fn new(e0: T, e1: T, e2: T, e3: T) -> Simd4<T> {
+         Simd4(e0, e1, e2, e3)
+     }
+ }
