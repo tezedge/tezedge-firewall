@@ -1,15 +1,16 @@
 //#![forbid(unsafe_code)]
 
 use structopt::StructOpt;
-use xdp_module::{Event, Status};
-
-use futures::{stream::{StreamExt, Stream}, channel::mpsc};
+use crypto::proof_of_work::check_proof_of_work;
+use xdp_module::{Event, Status, PowBytes};
+use futures::{stream::StreamExt};
 use redbpf::{
-    load::{Loader, map_io::PerfMessageStream},
+    load::{Loader, Loaded},
     xdp::Flags,
     HashMap,
+    Module,
 };
-use std::{env, ptr, convert::TryInto};
+use std::{env, ptr};
 use tokio::signal;
 
 #[derive(StructOpt)]
@@ -24,21 +25,46 @@ struct Opts {
     block: Vec<String>,
 }
 
-fn start_event_handler(events: mpsc::UnboundedReceiver<(String, <PerfMessageStream as Stream>::Item)>) {
+fn start_event_handler(loaded: Loaded) {
     tokio::spawn(async move {
-        let mut events = events;
+        let mut events = loaded.events;
         while let Some((name, events)) = events.next().await {
             for event in events {
                 match name.as_str() {
                     "events" => {
                         let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
                         println!("{:x?}", event);
+
+                        with_map_ref(&loaded.module, "list", |map| {
+                            match &event.pow_bytes {
+                                PowBytes::Nothing => (),
+                                PowBytes::NotEnough => map.set(event.pair.remote.ipv4.clone(), Status::Blocked),
+                                PowBytes::Bytes(b) => match check_proof_of_work(b, 26.0) {
+                                    Ok(()) => (),
+                                    Err(()) => map.set(event.pair.remote.ipv4.clone(), Status::Blocked),
+                                },
+                            }
+                        });
                     },
                     unknown => eprintln!("warning: ignored unknown event: {}", unknown),
                 }
             }
         }
     });
+}
+
+fn with_map_ref<'a, 'b, F, K, V>(module: &'a Module, name: &'b str, f: F)
+where
+    F: FnOnce(HashMap<'a, K, V>),
+    K: Clone,
+    V: Clone,
+{
+    if let Some(base) = module.maps.iter().find(|m| m.name == name) {
+        let map = HashMap::new(base).unwrap();
+        f(map)
+    } else {
+        panic!("{} not found", name)
+    }
 }
 
 #[tokio::main]
@@ -55,19 +81,18 @@ async fn main() {
             .expect(&format!("error attaching xdp program {}", kp.name()));
     }
 
-    start_event_handler(loaded.events);
-
-    let module = loaded.module;
-    if let Some(base) = module.maps.iter().find(|m| m.name == "list") {
-        let map = HashMap::<[u8; 4], Status>::new(base).unwrap();
+    with_map_ref(&loaded.module, "list", |map| {
         for block in opts.block {
             let block: String = block;
-            let ip = block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().collect::<Vec<_>>();
-            map.set(ip.try_into().unwrap(), Status::Blocked);
+            let mut ip = [0, 0, 0, 0];
+            for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().enumerate() {
+                ip[i] = b;
+            }
+            map.set(ip, Status::Blocked);
         }
-    } else {
-        eprintln!("warning: 'list' not found");
-    }
+    });
+
+    start_event_handler(loaded);
 
     signal::ctrl_c().await.unwrap();
 }
