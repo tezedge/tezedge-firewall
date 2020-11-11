@@ -1519,6 +1519,7 @@ dependencies = [
 name = "xdp_module"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "cargo-bpf",
  "redbpf-macros",
  "redbpf-probes",

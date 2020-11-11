@@ -27,16 +27,16 @@ pub enum PowBytes {
     Bytes([u8; 56]),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-#[repr(u32)]
-pub enum Status {
-    Allowed,
-    Blocked,
+bitflags::bitflags! {
+    pub struct Status: u32 {
+        const BLOCKED = 0b00000000_00000000_00000000_00000001;
+        const POW_SENT = 0b00000000_00000000_00000000_00000010;
+    }
 }
 
 mod implementations {
     use core::{fmt, convert::{TryFrom, TryInto}};
-    use super::{EndpointPair, Endpoint, PowBytes, Event, Status};
+    use super::{EndpointPair, Endpoint, PowBytes};
 
     impl From<EndpointPair> for [u8; 12] {
         fn from(v: EndpointPair) -> Self {
@@ -124,34 +124,6 @@ mod implementations {
                     PowBytes::Bytes(b)
                 },
                 _ => panic!(),
-            }
-        }
-    }
-
-    impl From<Event> for [u8; 76] {
-        fn from(v: Event) -> Self {
-            let mut r = [0; 76];
-            r[0..12].clone_from_slice(<[u8; 12]>::from(v.pair).as_ref());
-            r[12..16].clone_from_slice((v.new_status as u32).to_le_bytes().as_ref());
-            r[16..76].clone_from_slice(<[u8; 60]>::from(v.pow_bytes).as_ref());
-            r
-        }
-    }
-
-    impl From<[u8; 76]> for Event {
-        fn from(r: [u8; 76]) -> Self {
-            let mut b = [0; 60];
-            b.clone_from_slice(&r[16..76]);
-            Event {
-                pair: <[u8; 12]>::try_from(&r[0..12]).unwrap().into(),
-                new_status: {
-                    match u32::from_le_bytes(<[u8; 4]>::try_from(&r[12..16]).unwrap()) {
-                        0 => Status::Allowed,
-                        1 => Status::Blocked,
-                        _ => panic!(),
-                    }
-                },
-                pow_bytes: b.into(),
             }
         }
     }

@@ -38,10 +38,10 @@ fn start_event_handler(loaded: Loaded) {
                         with_map_ref(&loaded.module, "list", |map| {
                             match &event.pow_bytes {
                                 PowBytes::Nothing => (),
-                                PowBytes::NotEnough => map.set(event.pair.remote.ipv4.clone(), Status::Blocked),
+                                PowBytes::NotEnough => map.set(event.pair.remote.ipv4.clone(), Status::BLOCKED),
                                 PowBytes::Bytes(b) => match check_proof_of_work(b, 26.0) {
                                     Ok(()) => (),
-                                    Err(()) => map.set(event.pair.remote.ipv4.clone(), Status::Blocked),
+                                    Err(()) => map.set(event.pair.remote.ipv4.clone(), Status::BLOCKED),
                                 },
                             }
                         });
@@ -88,7 +88,7 @@ async fn main() {
             for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().enumerate() {
                 ip[i] = b;
             }
-            map.set(ip, Status::Blocked);
+            map.set(ip, Status::BLOCKED);
         }
     });
 
