@@ -21,11 +21,13 @@ struct Opts {
         help = "Interface name to attach the firewall"
     )]
     device: String,
-    #[structopt(short)]
+    #[structopt(short, long)]
     block: Vec<String>,
+    #[structopt(short, long, default_value = "26.0")]
+    target: f64,
 }
 
-fn start_event_handler(loaded: Loaded) {
+fn start_event_handler(loaded: Loaded, target: f64) {
     tokio::spawn(async move {
         let mut events = loaded.events;
         while let Some((name, events)) = events.next().await {
@@ -33,15 +35,21 @@ fn start_event_handler(loaded: Loaded) {
                 match name.as_str() {
                     "events" => {
                         let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
-                        println!("{:x?}", event);
+                        println!("{:x?}", &event);
 
                         with_map_ref(&loaded.module, "list", |map| {
+                            let block = || {
+                                let mut status = map.get(event.pair.remote.ipv4)
+                                    .unwrap_or(Status::empty());
+                                status.set(Status::BLOCKED, true);
+                                map.set(event.pair.remote.ipv4, status)
+                            };
                             match &event.pow_bytes {
                                 PowBytes::Nothing => (),
-                                PowBytes::NotEnough => map.set(event.pair.remote.ipv4.clone(), Status::BLOCKED),
-                                PowBytes::Bytes(b) => match check_proof_of_work(b, 26.0) {
+                                PowBytes::NotEnough => block(),
+                                PowBytes::Bytes(b) => match check_proof_of_work(b, target) {
                                     Ok(()) => (),
-                                    Err(()) => map.set(event.pair.remote.ipv4.clone(), Status::BLOCKED),
+                                    Err(()) => block(),
                                 },
                             }
                         });
@@ -69,7 +77,7 @@ where
 
 #[tokio::main]
 async fn main() {
-    let opts = Opts::from_args();
+    let Opts { device, block, target } = Opts::from_args();
 
     let code = include_bytes!(concat!(
         env!("OUT_DIR"),
@@ -77,12 +85,12 @@ async fn main() {
     ));
     let mut loaded = Loader::load(code).expect("error loading BPF program");
     for kp in loaded.xdps_mut() {
-        kp.attach_xdp(opts.device.as_str(), Flags::Unset)
+        kp.attach_xdp(device.as_str(), Flags::Unset)
             .expect(&format!("error attaching xdp program {}", kp.name()));
     }
 
     with_map_ref(&loaded.module, "list", |map| {
-        for block in opts.block {
+        for block in block {
             let block: String = block;
             let mut ip = [0, 0, 0, 0];
             for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().enumerate() {
@@ -92,7 +100,7 @@ async fn main() {
         }
     });
 
-    start_event_handler(loaded);
+    start_event_handler(loaded, target);
 
     signal::ctrl_c().await.unwrap();
 }
