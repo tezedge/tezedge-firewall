@@ -6,6 +6,19 @@ index f7aa5cb..0000000
 @@ -1,2 +0,0 @@
 -[workspace]
 -members = ["bpf-sys", "redbpf", "redbpf-probes", "redbpf-macros", "cargo-bpf", "redbpf-tools"]
+diff --git a/bpf-sys/src/headers.rs b/bpf-sys/src/headers.rs
+index 841fa71..f744079 100644
+--- a/bpf-sys/src/headers.rs
++++ b/bpf-sys/src/headers.rs
+@@ -102,7 +102,7 @@ fn kernel_headers_path() -> Result<KernelHeaders, HeadersError> {
+         let path = PathBuf::from(s);
+         KernelHeaders {
+             source: path.clone(),
+-            build: path
++            build: path.parent().unwrap().join("build"),
+         }
+     })
+     .or_else(lib_modules_kernel_headers)
 diff --git a/cargo-bpf/src/build_constants.rs b/cargo-bpf/src/build_constants.rs
 index f1e01c3..597ee47 100644
 --- a/cargo-bpf/src/build_constants.rs
@@ -19,3 +32,18 @@ index f1e01c3..597ee47 100644
              "-Wno-unused-value",
              "-Wno-pointer-sign",
              "-Wno-compare-distinct-pointer-types",
+diff --git a/redbpf/src/lib.rs b/redbpf/src/lib.rs
+index 95b0e3a..4215af5 100644
+--- a/redbpf/src/lib.rs
++++ b/redbpf/src/lib.rs
+@@ -578,7 +578,9 @@ impl Module {
+         // Rewrite programs with relocation data
+         for rel in rels.iter() {
+             if programs.contains_key(&rel.target) {
+-                rel.apply(&mut programs, &maps, &symtab)?;
++                if symtab[rel.sym].st_shndx != 0 { 
++                    rel.apply(&mut programs, &maps, &symtab)?;
++                }
+             }
+         }
+ 
