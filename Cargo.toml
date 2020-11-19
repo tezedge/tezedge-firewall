@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "xdp_module"]
+members = [".", "xdp_module", "packet-generator"]
 
 [package]
 name = "firewall"
