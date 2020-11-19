@@ -3,15 +3,14 @@
 use structopt::StructOpt;
 use crypto::proof_of_work::check_proof_of_work;
 use xdp_module::{Event, Status, PowBytes};
-use futures::{stream::StreamExt};
 use redbpf::{
-    load::{Loader, Loaded},
+    load::Loader,
     xdp::Flags,
     HashMap,
     Module,
 };
-use std::{env, ptr};
-use tokio::signal;
+use std::{env, ptr, sync::Arc};
+use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex, io::AsyncReadExt};
 
 #[derive(StructOpt)]
 struct Opts {
@@ -25,11 +24,16 @@ struct Opts {
     block: Vec<String>,
     #[structopt(short, long, default_value = "26.0")]
     target: f64,
+    #[structopt(short, long, default_value = "/tmp/tezedge_firewall.sock")]
+    socket: String,
 }
 
-fn start_event_handler(loaded: Loaded, target: f64) {
+fn start_event_handler<E>(events: E, module: Arc<Mutex<Module>>, target: f64)
+where
+    E: Unpin + Send + Stream<Item = (String, Vec<Box<[u8]>>)> + 'static,
+{
     tokio::spawn(async move {
-        let mut events = loaded.events;
+        let mut events = events;
         while let Some((name, events)) = events.next().await {
             for event in events {
                 match name.as_str() {
@@ -37,19 +41,14 @@ fn start_event_handler(loaded: Loaded, target: f64) {
                         let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
                         println!("{:x?}", &event);
 
-                        with_map_ref(&loaded.module, "list", |map| {
-                            let block = || {
-                                let mut status = map.get(event.pair.remote.ipv4)
-                                    .unwrap_or(Status::empty());
-                                status.set(Status::BLOCKED, true);
-                                map.set(event.pair.remote.ipv4, status)
-                            };
+                        let module = module.lock().await;
+                        with_map_ref(&module, "list", |map| {
                             match &event.pow_bytes {
                                 PowBytes::Nothing => (),
-                                PowBytes::NotEnough => block(),
+                                PowBytes::NotEnough => block_ip(map, event.pair.remote.ipv4),
                                 PowBytes::Bytes(b) => match check_proof_of_work(b, target) {
                                     Ok(()) => (),
-                                    Err(()) => block(),
+                                    Err(()) => block_ip(map, event.pair.remote.ipv4),
                                 },
                             }
                         });
@@ -59,6 +58,13 @@ fn start_event_handler(loaded: Loaded, target: f64) {
             }
         }
     });
+}
+
+fn block_ip<'a>(map: HashMap<'a, [u8; 4], Status>, ipv4: [u8; 4]) {
+    let mut status = map.get(ipv4)
+        .unwrap_or(Status::empty());
+    status.set(Status::BLOCKED, true);
+    map.set(ipv4, status);
 }
 
 fn with_map_ref<'a, 'b, F, K, V>(module: &'a Module, name: &'b str, f: F)
@@ -77,7 +83,7 @@ where
 
 #[tokio::main]
 async fn main() {
-    let Opts { device, block, target } = Opts::from_args();
+    let Opts { device, block, target, socket } = Opts::from_args();
 
     let code = include_bytes!(concat!(
         env!("OUT_DIR"),
@@ -100,7 +106,29 @@ async fn main() {
         }
     });
 
-    start_event_handler(loaded, target);
+    let module = Arc::new(Mutex::new(loaded.module));
+    start_event_handler(loaded.events, module.clone(), target);
+
+    tokio::spawn(async move {
+        let mut listener = UnixListener::bind(socket).unwrap();
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+
+            let module = module.clone();
+            tokio::spawn(async move {
+                // TODO: serde, bincode, deserialize `Command` and execute it
+                let mut buffer = [0; 4];
+                loop {
+                    stream.read_exact(buffer.as_mut()).await.unwrap();
+                    let module = module.lock().await;
+                    with_map_ref(&module, "list", |map| {
+                        block_ip(map, buffer)
+                    })
+                }
+            });
+        }
+    });
+
 
     signal::ctrl_c().await.unwrap();
 }

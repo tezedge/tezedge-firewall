@@ -1,11 +1,25 @@
 #![no_std]
 
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+pub enum Command {
+    Blacklist(Ip),
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Ip {
+    Ipv4([u8; 4]),
+    Ipv6([u8; 16]),
+}
+
 #[derive(Debug, Clone)]
 pub struct EndpointPair {
     pub remote: Endpoint,
     pub local: Endpoint,
 }
 
+// TODO: ipv6
 #[derive(Clone)]
 pub struct Endpoint {
     pub ipv4: [u8; 4],
