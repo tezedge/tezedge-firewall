@@ -122,7 +122,9 @@ async fn main() {
                     stream.read_exact(buffer.as_mut()).await.unwrap();
                     let module = module.lock().await;
                     with_map_ref(&module, "list", |map| {
-                        block_ip(map, buffer)
+                        // TODO: fix the order properly
+                        let ip = [buffer[3], buffer[2], buffer[1], buffer[0]];
+                        block_ip(map, ip)
                     })
                 }
             });
