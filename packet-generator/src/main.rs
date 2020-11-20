@@ -8,37 +8,9 @@ struct Opts {
     address: SocketAddr,
 }
 
-async fn read_at_tap(s: TcpStream) -> Result<(), io::Error> {
-    let mut buf = [0; 0x10000];
-    let mut s = s;
-    loop {
-        match s.read(buf.as_mut()).await {
-            Ok(r) => println!("read {} bytes", r),
-            Err(e) => if let io::ErrorKind::ConnectionReset = e.kind() {
-                break Ok(());
-            } else {
-                return Err(e);
-            }
-        }
-    }
-}
-
-async fn listen_at_tap(address: SocketAddr) -> Result<(), io::Error> {
-    let mut l = TcpListener::bind(address).await?;
-
-    while let Some(s) = l.next().await {
-        let s = s?;
-        tokio::spawn(async move { read_at_tap(s).await.unwrap() });
-    }
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let Opts { address } = Opts::from_args();
-
-    tokio::spawn(async move { listen_at_tap(address.clone()).await.unwrap() });
 
     let mut s = TcpStream::connect(address).await?;
     let mut b = [0; 0x100];

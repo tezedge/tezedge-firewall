@@ -342,7 +342,7 @@ dependencies = [
  "serde",
  "structopt",
  "tokio 0.2.22",
- "xdp_module",
+ "xdp-module",
 ]
 
 [[package]]
@@ -1644,7 +1644,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xdp_module"
+name = "xdp-module"
 version = "0.1.0"
 dependencies = [
  "bitflags",

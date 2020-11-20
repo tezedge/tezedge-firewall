@@ -6,7 +6,7 @@ use cargo_bpf_lib as cargo_bpf;
 fn main() {
     let cargo = PathBuf::from(env::var("CARGO").unwrap());
     let target = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let module = Path::new("xdp_module");
+    let module = Path::new("xdp-module");
 
     cargo_bpf::build(&cargo, &module, &target.join("target"), Vec::new())
         .expect("couldn't compile module");
