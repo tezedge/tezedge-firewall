@@ -7,3 +7,4 @@ git apply ../redbpf.patch
 git submodule sync
 git submodule update --init
 popd
+git apply self.patch
