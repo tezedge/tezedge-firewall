@@ -25,8 +25,6 @@ RUN wget https://apt.llvm.org/llvm.sh; \
 
 WORKDIR /root
 
-COPY . .
-
 # firewall
 # RUN LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
 
