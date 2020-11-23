@@ -1,6 +1,6 @@
 use std::{io, net::SocketAddr};
 use structopt::StructOpt;
-use tokio::{net::{TcpListener, TcpStream}, io::{AsyncReadExt, AsyncWriteExt}, stream::StreamExt};
+use tokio::{net::TcpStream, io::AsyncWriteExt};
 
 #[derive(StructOpt)]
 struct Opts {

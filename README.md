@@ -10,3 +10,16 @@ For example `sudo ./target/debug/firewall --device enp4s0 -b 51.15.220.7 -b 95.2
 
 Listening external command from socket. For now each 4 bytes read from the socket interpreted as ipv4 to block.
 Default socket path is `/tmp/tezedge_firewall.sock`, can be redefined by `--socket=new/path.sock`
+
+# Docker
+
+Build docker image for specified kernel.
+
+```
+docker build -t bpf-firewall-$(uname -r) --build-arg kernel_version=$(uname -r) .
+```
+
+Run docker container 
+```
+docker run --privileged -d bpf-firewall-$(uname -r)
+```

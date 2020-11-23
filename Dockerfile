@@ -2,7 +2,7 @@ from ubuntu:20.04
 
 # deps
 RUN apt-get update && \
-    DEBIAN_FRONTEND='noninteractive' apt install -y git wget gcc libsodium-dev make zlib1g-dev;
+    DEBIAN_FRONTEND='noninteractive' apt install -y git wget gcc kmod libsodium-dev make zlib1g-dev;
 
 # rust
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -23,9 +23,20 @@ RUN wget https://apt.llvm.org/llvm.sh; \
     ./llvm.sh 11; \
     rm llvm.sh;
 
-WORKDIR /root
+# prepare kernel
+ARG kernel_version
+RUN DEBIAN_FRONTEND='noninteractive' apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev && \
+    cd /usr/src && \
+    wget -c https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${kernel_version}.tar.xz && \
+    bsdtar xJf linux-${kernel_version}.tar.xz && \
+    cd linux-${kernel_version} && \
+    make defconfig && \
+    make modules_prepare
 
 # firewall
-# RUN LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
+RUN KERNEL_VERSION=${kernel_version} \
+    KERNEL_SOURCE=/usr/src/linux-${kernel_version} \
+    LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 \
+    cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
 
-# CMD firewall --device eth0
+CMD firewall --device eth0
