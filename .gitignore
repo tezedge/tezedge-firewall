@@ -2,3 +2,4 @@
 /hashes
 /redbpf
 Cargo.lock
+/*.elf

@@ -9,7 +9,7 @@ use redbpf::{
     HashMap,
     Module,
 };
-use std::{env, ptr, sync::Arc};
+use std::{fs::{self, File}, io::{self, Read}, ptr, sync::Arc, path::PathBuf};
 use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex, io::AsyncReadExt};
 
 #[derive(StructOpt)]
@@ -20,6 +20,8 @@ struct Opts {
         help = "Interface name to attach the firewall"
     )]
     device: String,
+    #[structopt(short, long, default_value = "xdp_module.elf")]
+    probe: PathBuf,
     #[structopt(short, long)]
     block: Vec<String>,
     #[structopt(short, long, default_value = "26.0")]
@@ -83,13 +85,12 @@ where
 
 #[tokio::main]
 async fn main() {
-    let Opts { device, block, target, socket } = Opts::from_args();
+    let Opts { device, probe, block, target, socket } = Opts::from_args();
 
-    let code = include_bytes!(concat!(
-        env!("OUT_DIR"),
-        "/target/bpf/programs/xdp_module/xdp_module.elf"
-    ));
-    let mut loaded = Loader::load(code).expect("error loading BPF program");
+    let mut code = Vec::new();
+    File::open(probe).unwrap().read_to_end(&mut code).unwrap();
+
+    let mut loaded = Loader::load(code.as_ref()).expect("error loading BPF program");
     for kp in loaded.xdps_mut() {
         kp.attach_xdp(device.as_str(), Flags::Unset)
             .expect(&format!("error attaching xdp program {}", kp.name()));
@@ -110,6 +111,15 @@ async fn main() {
     start_event_handler(loaded.events, module.clone(), target);
 
     tokio::spawn(async move {
+        fs::remove_file(socket.clone())
+            .or_else(|e| {
+                if let io::ErrorKind::NotFound = e.kind() {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
+            .unwrap();
         let mut listener = UnixListener::bind(socket).unwrap();
         loop {
             let (mut stream, _) = listener.accept().await.unwrap();
