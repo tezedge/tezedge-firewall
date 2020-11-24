@@ -29,11 +29,11 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
 
         let pair = EndpointPair {
             remote: Endpoint {
-                ipv4: ipv4.saddr.to_be_bytes(),
+                ipv4: ipv4.saddr.to_le_bytes(),
                 port: tcp.source.to_be_bytes(),
             },
             local: Endpoint {
-                ipv4: ipv4.daddr.to_be_bytes(),
+                ipv4: ipv4.daddr.to_le_bytes(),
                 port: tcp.dest.to_be_bytes(),
             },
         };
@@ -44,7 +44,6 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
         let mut status = match unsafe { list.get(&pair.remote.ipv4) } {
             Some(st) => st.clone(),
             _ => Status::empty(),
-            // _ => Status::Blocked,
         };
 
         let mut pow_bytes = PowBytes::Bytes([0; 56]);

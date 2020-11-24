@@ -33,10 +33,14 @@ RUN DEBIAN_FRONTEND='noninteractive' apt install -y libarchive-tools flex bison 
     make defconfig && \
     make modules_prepare
 
+WORKDIR /root
+
+COPY . bpf-firewall/
+
 # firewall
-RUN KERNEL_VERSION=${kernel_version} \
+RUN cd bpf-firewall && \
+    KERNEL_VERSION=${kernel_version} \
     KERNEL_SOURCE=/usr/src/linux-${kernel_version} \
     LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 \
-    cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
-
-CMD firewall --device eth0
+    cargo build
+    # cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall

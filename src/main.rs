@@ -2,7 +2,7 @@
 
 use structopt::StructOpt;
 use crypto::proof_of_work::check_proof_of_work;
-use xdp_module::{Event, Status, PowBytes};
+use xdp_module::{Event, Status, PowBytes, BlockingReason};
 use redbpf::{
     load::Loader,
     xdp::Flags,
@@ -15,6 +15,7 @@ use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex,
 #[derive(StructOpt)]
 struct Opts {
     #[structopt(
+        short,
         long,
         default_value = "enp4s0",
         help = "Interface name to attach the firewall"
@@ -43,12 +44,15 @@ where
 
                         let module = module.lock().await;
                         with_map_ref(&module, "list", |map| {
+                            let ip = event.pair.remote.ipv4;
                             match &event.pow_bytes {
                                 PowBytes::Nothing => (),
-                                PowBytes::NotEnough => block_ip(map, event.pair.remote.ipv4),
+                                PowBytes::NotEnough => {
+                                    block_ip(map, ip, BlockingReason::BadProofOfWork)
+                                },
                                 PowBytes::Bytes(b) => match check_proof_of_work(b, target) {
                                     Ok(()) => (),
-                                    Err(()) => block_ip(map, event.pair.remote.ipv4),
+                                    Err(()) => block_ip(map, ip, BlockingReason::BadProofOfWork),
                                 },
                             }
                         });
@@ -60,10 +64,12 @@ where
     });
 }
 
-fn block_ip<'a>(map: HashMap<'a, [u8; 4], Status>, ipv4: [u8; 4]) {
+fn block_ip<'a>(map: HashMap<'a, [u8; 4], Status>, ipv4: [u8; 4], reason: BlockingReason) {
     let mut status = map.get(ipv4)
         .unwrap_or(Status::empty());
     status.set(Status::BLOCKED, true);
+    // TODO: store reason somewhere in userspace
+    let _ = reason;
     map.set(ipv4, status);
 }
 
@@ -99,7 +105,7 @@ async fn main() {
         for block in block {
             let block: String = block;
             let mut ip = [0, 0, 0, 0];
-            for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).rev().enumerate() {
+            for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).enumerate() {
                 ip[i] = b;
             }
             map.set(ip, Status::BLOCKED);
@@ -131,15 +137,12 @@ async fn main() {
                     stream.read_exact(buffer.as_mut()).await.unwrap();
                     let module = module.lock().await;
                     with_map_ref(&module, "list", |map| {
-                        // TODO: fix the order properly
-                        let ip = [buffer[3], buffer[2], buffer[1], buffer[0]];
-                        block_ip(map, ip)
+                        block_ip(map, buffer, BlockingReason::EventFromTezedge)
                     })
                 }
             });
         }
     });
-
 
     signal::ctrl_c().await.unwrap();
 }

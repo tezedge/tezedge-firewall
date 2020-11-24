@@ -33,6 +33,14 @@ pub struct Event {
     pub pow_bytes: PowBytes,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BlockingReason {
+    NoBlocking,
+    CommandLineArgument,
+    BadProofOfWork,
+    EventFromTezedge,
+}
+
 #[derive(Clone)]
 #[repr(u32)]
 pub enum PowBytes {
