@@ -44,3 +44,7 @@ RUN cd bpf-firewall && \
     LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 \
     cargo build
     # cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
+
+RUN DEBIAN_FRONTEND='noninteractive' apt install -y netcat && \
+    git clone "https://github.com/simplestaking/tezedge.git" && \
+    cd tezedge && git checkout tags/v0.6.0 -b v0.6.0 && cargo build --release

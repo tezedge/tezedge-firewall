@@ -1,0 +1,24 @@
+version: "3"
+
+services:
+  firewall:
+    build:
+      context: .
+      args:
+        kernel_version: ${KERNEL_VERSION}
+    privileged: true
+    volumes:
+      - "socket:/tmp"
+    entrypoint: sh -c "./tezedge/run release & ./bpf-firewall/target/debug/firewall -d eth0"
+
+  packet-generator:
+    build:
+      context: .
+      dockerfile: packet-generator.dockerfile
+    volumes:
+      - "socket:/tmp"
+    entrypoint: ./bpf-firewall/target/debug/packet-generator --address firewall:9732
+
+volumes:
+  socket:
+    external: false

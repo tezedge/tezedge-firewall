@@ -1,11 +1,11 @@
-use std::{io, net::SocketAddr};
+use std::io;
 use structopt::StructOpt;
 use tokio::{net::TcpStream, io::AsyncWriteExt};
 
 #[derive(StructOpt)]
 struct Opts {
     #[structopt(long, help = "Address at the tap interface")]
-    address: SocketAddr,
+    address: String,
 }
 
 #[tokio::main]
