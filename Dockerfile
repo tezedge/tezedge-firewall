@@ -1,8 +1,8 @@
-from ubuntu:20.04
+FROM ubuntu:20.04
 
 # deps
-RUN apt-get update && \
-    DEBIAN_FRONTEND='noninteractive' apt install -y git wget gcc kmod libsodium-dev make zlib1g-dev;
+ENV DEBIAN_FRONTEND='noninteractive'
+RUN apt-get update && apt install -y git wget gcc kmod libsodium-dev make zlib1g-dev
 
 # rust
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -19,13 +19,13 @@ RUN set -eux; \
 # llvm 11
 RUN wget https://apt.llvm.org/llvm.sh; \
     chmod +x llvm.sh; \
-    DEBIAN_FRONTEND='noninteractive' apt install -y lsb-release software-properties-common; \
+    apt install -y lsb-release software-properties-common; \
     ./llvm.sh 11; \
     rm llvm.sh;
 
 # prepare kernel
 ARG kernel_version
-RUN DEBIAN_FRONTEND='noninteractive' apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev && \
+RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev && \
     cd /usr/src && \
     wget -c https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${kernel_version}.tar.xz && \
     bsdtar xJf linux-${kernel_version}.tar.xz && \
@@ -35,16 +35,23 @@ RUN DEBIAN_FRONTEND='noninteractive' apt install -y libarchive-tools flex bison 
 
 WORKDIR /root
 
-COPY . bpf-firewall/
+# tezedge
+ENV LLVM_CONFIG_PATH="/usr/lib/llvm-11/bin/llvm-config" \
+    SODIUM_USE_PKG_CONFIG=1
+RUN apt install -y curl g++ libev-dev pkg-config gawk && \
+    git clone "https://github.com/simplestaking/tezedge.git" && \
+    cd tezedge && git checkout tags/v0.6.0 -b v0.6.0 && \
+    cp docker/identities/identity_tezedge.json light_node/etc/tezedge/identity.json && \
+    cargo build --release
+
+RUN LD_LIBRARY_PATH="${BASH_SOURCE%/*}/tezos/interop/lib_tezos/artifacts:${BASH_SOURCE%/*}/target/release" \
+    cd tezedge && cargo build --release
 
 # firewall
+COPY . bpf-firewall/
 RUN cd bpf-firewall && \
     KERNEL_VERSION=${kernel_version} \
     KERNEL_SOURCE=/usr/src/linux-${kernel_version} \
     LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 \
-    cargo build
+    cargo build -p firewall
     # cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
-
-RUN DEBIAN_FRONTEND='noninteractive' apt install -y netcat && \
-    git clone "https://github.com/simplestaking/tezedge.git" && \
-    cd tezedge && git checkout tags/v0.6.0 -b v0.6.0 && cargo build --release

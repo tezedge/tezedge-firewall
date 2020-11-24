@@ -7,3 +7,9 @@ edition = "2018"
 [dependencies]
 structopt = "0.3"
 tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream"] }
+hex = "0.4"
+rand = "0.7"
+
+tezos_messages = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
+crypto = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
+tezos-conversation = { branch = "develop", git = "https://github.com/simplestaking/tezos-dissector" }

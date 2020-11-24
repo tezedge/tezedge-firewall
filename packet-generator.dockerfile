@@ -1,8 +1,8 @@
-from ubuntu:20.04
+FROM ubuntu:20.04
 
 # deps
-RUN apt-get update && \
-    DEBIAN_FRONTEND='noninteractive' apt install -y git wget gcc libsodium-dev;
+ENV DEBIAN_FRONTEND='noninteractive'
+RUN apt-get update && apt install -y git wget gcc libsodium-dev
 
 # rust
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -21,6 +21,6 @@ WORKDIR /root
 COPY . bpf-firewall/
 
 # packet-generator
-RUN cd bpf-firewall && \
-    cargo build -p packet-generator
-
+ENV SODIUM_USE_PKG_CONFIG=1
+RUN apt install -y pkg-config && \
+    cd bpf-firewall && cargo build -p packet-generator
