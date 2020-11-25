@@ -19,7 +19,18 @@ Build docker image for specified kernel.
 docker build -t bpf-firewall-$(uname -r) --build-arg kernel_version=$(uname -r) .
 ```
 
-Run docker container 
+Run docker container, it should be privileged.
 ```
 docker run --privileged -d bpf-firewall-$(uname -r)
+```
+
+
+Build docker-compose, should set `KERNEL_VERSION` variable.
+```
+KERNEL_VERSION=$(uname -r) docker-compose build
+```
+
+Run docker-compose is simple
+```
+docker-compose up
 ```
