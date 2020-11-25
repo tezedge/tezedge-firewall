@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 structopt = "0.3"
-tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream"] }
+tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream", "time"] }
 hex = "0.4"
 rand = "0.7"
 

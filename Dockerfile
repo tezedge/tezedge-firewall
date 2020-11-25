@@ -35,18 +35,6 @@ RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev && \
 
 WORKDIR /root
 
-# tezedge
-ENV LLVM_CONFIG_PATH="/usr/lib/llvm-11/bin/llvm-config" \
-    SODIUM_USE_PKG_CONFIG=1
-RUN apt install -y curl g++ libev-dev pkg-config gawk && \
-    git clone "https://github.com/simplestaking/tezedge.git" && \
-    cd tezedge && git checkout tags/v0.6.0 -b v0.6.0 && \
-    cp docker/identities/identity_tezedge.json light_node/etc/tezedge/identity.json && \
-    cargo build --release
-
-RUN LD_LIBRARY_PATH="${BASH_SOURCE%/*}/tezos/interop/lib_tezos/artifacts:${BASH_SOURCE%/*}/target/release" \
-    cd tezedge && cargo build --release
-
 # firewall
 COPY . bpf-firewall/
 RUN cd bpf-firewall && \

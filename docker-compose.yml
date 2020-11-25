@@ -10,28 +10,35 @@ services:
     networks:
       - firewall-network
     volumes:
-      - "socket:/tmp"
-    entrypoint: sh -c "cd tezedge && SODIUM_USE_PKG_CONFIG=1 ./run.sh release & ./bpf-firewall/target/debug/firewall -d eth0"
+      - "storage:/tmp"
+    entrypoint: sh -c "./bpf-firewall/target/debug/firewall -d eth0"
+
+  rust-node:
+    image: simplestakingcom/tezedge:v0.5.0
+    depends_on:
+      - firewall
+    network_mode: "service:firewall"
+    volumes:
+      - "storage:/tmp"
+    entrypoint: /home/appuser/tezedge/docker/compose/tezedge.sh
 
   packet-generator:
     build:
       context: .
       dockerfile: packet-generator.dockerfile
     depends_on:
-      - firewall
+      - rust-node
     networks:
       - firewall-network
     volumes:
-      - "socket:/tmp"
-    entrypoint: sh -c "sleep 5 && cd bpf-firewall && ./target/debug/packet-generator --address firewall:9732"
+      - "storage:/tmp"
+    entrypoint: sh -c "cd bpf-firewall && ./target/debug/packet-generator --address firewall:9732"
 
 volumes:
-  socket:
+  storage:
     external: false
 
 networks:
   firewall-network:
     driver: bridge
     internal: true
-  internet:
-    driver: bridge

@@ -1,6 +1,6 @@
 use std::{io, convert::TryFrom};
 use structopt::StructOpt;
-use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}};
+use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}, time};
 use tezos_messages::p2p::{
     encoding::{
         connection::ConnectionMessage,
@@ -21,7 +21,16 @@ struct Opts {
 async fn main() -> Result<(), io::Error> {
     let Opts { address } = Opts::from_args();
 
-    let mut s = TcpStream::connect(address.clone()).await?;
+    let mut s = loop {
+        match TcpStream::connect(address.clone()).await {
+            Ok(s) => break s,
+            Err(_) => {
+                println!("wait 5 seconds");
+                let _ = time::sleep(time::Duration::new(5, 0)).await;
+            },
+        }
+    };
+
     let decipher = handshake(&mut s, "identity_good.json".to_string()).await.unwrap();
     let m = MetadataMessage::new(false, false);
     write_message(&decipher, 0, &mut s, &[m]).await?;
