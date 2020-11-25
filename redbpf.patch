@@ -32,18 +32,3 @@ index f1e01c3..597ee47 100644
              "-Wno-unused-value",
              "-Wno-pointer-sign",
              "-Wno-compare-distinct-pointer-types",
-diff --git a/redbpf/src/lib.rs b/redbpf/src/lib.rs
-index 95b0e3a..4215af5 100644
---- a/redbpf/src/lib.rs
-+++ b/redbpf/src/lib.rs
-@@ -578,7 +578,9 @@ impl Module {
-         // Rewrite programs with relocation data
-         for rel in rels.iter() {
-             if programs.contains_key(&rel.target) {
--                rel.apply(&mut programs, &maps, &symtab)?;
-+                if symtab[rel.sym].st_shndx != 0 { 
-+                    rel.apply(&mut programs, &maps, &symtab)?;
-+                }
-             }
-         }
- 
