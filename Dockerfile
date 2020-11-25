@@ -23,23 +23,15 @@ RUN wget https://apt.llvm.org/llvm.sh; \
     ./llvm.sh 11; \
     rm llvm.sh;
 
-# prepare kernel
-ARG kernel_version
-RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev && \
-    cd /usr/src && \
-    wget -c https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${kernel_version}.tar.xz && \
-    bsdtar xJf linux-${kernel_version}.tar.xz && \
-    cd linux-${kernel_version} && \
-    make defconfig && \
-    make modules_prepare
+# firewall
+RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev
 
 WORKDIR /root
-
-# firewall
 COPY . bpf-firewall/
+
 RUN cd bpf-firewall && \
-    KERNEL_VERSION=${kernel_version} \
-    KERNEL_SOURCE=/usr/src/linux-${kernel_version} \
-    LLVM_SYS_110_PREFIX=/usr/lib/llvm-11 \
-    cargo build -p firewall
-    # cargo install --git https://github.com/simplestaking/bpf-firewall.git firewall
+    ./build.sh 4.18.20 4 && \
+    ./build.sh 5.0.21 5 && \
+    ./build.sh 5.3.18 5 && \
+    ./build.sh 5.4.80 5 && \
+    ./build.sh 5.8.18 5

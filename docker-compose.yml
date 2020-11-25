@@ -2,16 +2,14 @@ version: "3"
 
 services:
   firewall:
-    build:
-      context: .
-      args:
-        kernel_version: ${KERNEL_VERSION}
+    build: .
     privileged: true
     networks:
       - firewall-network
     volumes:
       - "storage:/tmp"
-    entrypoint: sh -c "./bpf-firewall/target/debug/firewall -d eth0"
+    # TODO:
+    entrypoint: sh -c "./firewall-5.0.21 -d eth0"
 
   rust-node:
     image: simplestakingcom/tezedge:v0.5.0

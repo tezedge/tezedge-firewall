@@ -57,7 +57,6 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             },
         };
 
-        let port = u16::from_be_bytes(pair.remote.port);
         if whitelisted(&pair.remote) {
             return Ok(XdpAction::Pass);
         }

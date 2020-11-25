@@ -21,24 +21,10 @@ Also, wildcard supported, `-w 0.0.0.0:80` whitelist port 80 at any IP, and `-w x
 Build docker image for specified kernel.
 
 ```
-docker build -t bpf-firewall-$(uname -r) --build-arg kernel_version=$(uname -r) .
+docker build -t bpf-firewall .
 ```
 
 Run docker container, it should be privileged.
 ```
-docker run --privileged -d bpf-firewall-$(uname -r)
-```
-
-## Docker-compose
-
-Docker-compose used for testing the whole flow.
-
-Build, should set `KERNEL_VERSION` variable.
-```
-KERNEL_VERSION=$(uname -r) docker-compose build
-```
-
-Run is simple
-```
-docker-compose up
+docker run --privileged -d bpf-firewall
 ```
