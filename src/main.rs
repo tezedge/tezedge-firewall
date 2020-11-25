@@ -2,14 +2,14 @@
 
 use structopt::StructOpt;
 use crypto::proof_of_work::check_proof_of_work;
-use xdp_module::{Event, Status, PowBytes, BlockingReason};
+use xdp_module::{Event, Status, PowBytes, BlockingReason, Endpoint};
 use redbpf::{
     load::Loader,
     xdp::Flags,
     HashMap,
     Module,
 };
-use std::{env, fs, io, ptr, sync::Arc};
+use std::{env, fs, io, ptr, sync::Arc, net::SocketAddr};
 use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex, io::AsyncReadExt};
 
 #[derive(StructOpt)]
@@ -21,8 +21,21 @@ struct Opts {
         help = "Interface name to attach the firewall"
     )]
     device: String,
-    #[structopt(short, long)]
-    block: Vec<String>,
+    #[structopt(
+        short,
+        long,
+        help = "Blacklist an IP, currently only v4 supported",
+    )]
+    blacklist: Vec<String>,
+    #[structopt(
+        short,
+        long,
+        help = "Whitelist endpoint, \
+                use 0.0.0.0:xxxx to whitelist specified port at any IP, \
+                use xx.xx.xx.xx:0 to whitelist any port on the specified IP. \
+                For example `0.0.0.0:80` allow http.",
+    )]
+    whitelist: Vec<String>,
     #[structopt(short, long, default_value = "26.0")]
     target: f64,
     #[structopt(short, long, default_value = "/tmp/tezedge_firewall.sock")]
@@ -43,7 +56,7 @@ where
                         println!("{:x?}", &event);
 
                         let module = module.lock().await;
-                        with_map_ref(&module, "list", |map| {
+                        with_map_ref(&module, "blacklist", |map| {
                             let ip = event.pair.remote.ipv4;
                             match &event.pow_bytes {
                                 PowBytes::Nothing => (),
@@ -89,7 +102,7 @@ where
 
 #[tokio::main]
 async fn main() {
-    let Opts { device, block, target, socket } = Opts::from_args();
+    let Opts { device, blacklist, whitelist, target, socket } = Opts::from_args();
 
     let code = include_bytes!(concat!(
         env!("OUT_DIR"),
@@ -101,9 +114,22 @@ async fn main() {
             .expect(&format!("error attaching xdp program {}", kp.name()));
     }
 
-    with_map_ref(&loaded.module, "list", |map| {
-        for block in block {
-            let block: String = block;
+    with_map_ref(&loaded.module, "whitelist", |map| {
+        for allow in whitelist {
+            let socket_address = allow.parse::<SocketAddr>().unwrap();
+            let key = match socket_address {
+                SocketAddr::V4(a) => Endpoint {
+                    ipv4: a.ip().octets(),
+                    port: a.port().to_be_bytes(),
+                },
+                _ => panic!("ipv6 no supported"),
+            };
+            map.set(key, 0u32);
+        }
+    });
+
+    with_map_ref(&loaded.module, "blacklist", |map| {
+        for block in blacklist {
             let mut ip = [0, 0, 0, 0];
             for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).enumerate() {
                 ip[i] = b;
@@ -136,7 +162,7 @@ async fn main() {
                 loop {
                     stream.read_exact(buffer.as_mut()).await.unwrap();
                     let module = module.lock().await;
-                    with_map_ref(&module, "list", |map| {
+                    with_map_ref(&module, "blacklist", |map| {
                         block_ip(map, buffer, BlockingReason::EventFromTezedge)
                     })
                 }

@@ -81,7 +81,7 @@ mod implementations {
     impl fmt::Debug for Endpoint {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let ip = self.ipv4;
-            let port = u16::from_le_bytes(self.port);
+            let port = u16::from_be_bytes(self.port);
             write!(f, "{}.{}.{}.{}:{}", ip[3], ip[2], ip[1], ip[0], port)
         }
     }
