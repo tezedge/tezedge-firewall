@@ -11,7 +11,6 @@ fn main() {
     cargo_bpf::build(&cargo, &module, &target.join("target"), Vec::new())
         .expect("couldn't compile module");
 
-    println!("cargo:rerun-if-changed={}", env::var("KERNEL_VERSION").unwrap());
     cargo_bpf::probe_files(&module)
         .expect("couldn't list module files")
         .iter()

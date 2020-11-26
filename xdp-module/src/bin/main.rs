@@ -2,42 +2,32 @@
 #![no_main]
 
 use redbpf_probes::xdp::prelude::*;
-use xdp_module::{Endpoint, EndpointPair, Event, Status, PowBytes};
+use xdp_module::{Endpoint, EndpointPair, Event, Status, PowBytes, Peer};
 
 program!(0xFFFFFFFE, "GPL");
 
+type MapVoid = u32;
+
+/// buffer for 256 events, should be enough
 #[map("events")]
 static mut events: PerfMap<Event> = PerfMap::with_max_entries(0x100);
 
+/// limit is 1024 entries
 #[map("blacklist")]
-static mut blacklist: HashMap<[u8; 4], Status> = HashMap::with_max_entries(0x100);
+static mut blacklist: HashMap<[u8; 4], u32> = HashMap::with_max_entries(0x400);
 
-#[map("whitelist")]
-static mut whitelist: HashMap<Endpoint, u32> = HashMap::with_max_entries(0x100);
+/// simultaneous 1024 connections maximum
+#[map("peers")]
+static mut peers: HashMap<[u8; 32], Peer> = HashMap::with_max_entries(0x400);
+
+#[map("pending_peers")]
+static mut pending_peers: HashMap<Endpoint, MapVoid> = HashMap::with_max_entries(0x400);
+
+#[map("node")]
+static mut node: HashMap<u16, MapVoid> = HashMap::with_max_entries(1);
 
 #[map("status")]
 static mut status_map: HashMap<EndpointPair, Status> = HashMap::with_max_entries(0x10000);
-
-#[inline(always)]
-fn whitelisted(endpoint: &Endpoint) -> bool {
-    let temp = Endpoint {
-        ipv4: [0, 0, 0, 0],
-        port: endpoint.port,
-    };
-    if unsafe { whitelist.get(&temp).is_some() } {
-        return true;
-    }
-
-    let temp = Endpoint {
-        ipv4: endpoint.ipv4,
-        port: [0, 0],
-    };
-    if unsafe { whitelist.get(&temp).is_some() } {
-        return true;
-    }
-
-    unsafe { whitelist.get(endpoint).is_some() }
-}
 
 #[xdp]
 pub fn firewall(ctx: XdpContext) -> XdpResult {
@@ -57,12 +47,8 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             },
         };
 
-        if whitelisted(&pair.remote) {
-            return Ok(XdpAction::Pass);
-        }
-
         // retrieve the status for given remote ip
-        let mut status = match unsafe { blacklist.get(&pair.remote.ipv4) } {
+        /*let mut status = match unsafe { blacklist.get(&pair.remote.ipv4) } {
             Some(st) => st.clone(),
             _ => Status::empty(),
         };
@@ -111,7 +97,7 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             Ok(XdpAction::Drop)
         } else {
             Ok(XdpAction::Pass)
-        }
+        }*/Ok(XdpAction::Pass)
     } else {
         // not TCP
         Ok(XdpAction::Pass)

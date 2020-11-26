@@ -1,16 +1,10 @@
 #![no_std]
 
-use serde::{Serialize, Deserialize};
-
-#[derive(Serialize, Deserialize)]
-pub enum Command {
-    Blacklist(Ip),
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum Ip {
-    Ipv4([u8; 4]),
-    Ipv6([u8; 16]),
+#[derive(Clone)]
+#[repr(u32)]
+pub enum Peer {
+    Uncertain(Endpoint),
+    Valid(Endpoint),
 }
 
 #[derive(Debug, Clone)]

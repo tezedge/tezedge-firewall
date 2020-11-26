@@ -3,3 +3,5 @@
 /redbpf
 Cargo.lock
 /*.elf
+/prepare_dependencies.sh
+/redbpf.patch
