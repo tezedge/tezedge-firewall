@@ -16,11 +16,10 @@ RUN set -eux; \
     rm rustup-init; \
     chmod -R a+w $RUSTUP_HOME $CARGO_HOME;
 
-WORKDIR /root
-
-COPY . bpf-firewall/
+COPY . /root/bpf-firewall
+WORKDIR /root/bpf-firewall
 
 # packet-generator
 ENV SODIUM_USE_PKG_CONFIG=1
 RUN apt install -y pkg-config && \
-    cd bpf-firewall && cargo build -p packet-generator
+    cargo build -p packet-generator

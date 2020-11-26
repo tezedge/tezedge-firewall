@@ -22,14 +22,15 @@ RUN wget https://apt.llvm.org/llvm.sh; \
     apt install -y lsb-release software-properties-common; \
     ./llvm.sh 11; \
     rm llvm.sh;
+ENV LLVM_SYS_110_PREFIX=/usr/lib/llvm-11
 
 # firewall
 RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev
 
-WORKDIR /root
-COPY . bpf-firewall/
+COPY . /root/bpf-firewall
+WORKDIR /root/bpf-firewall
 
-RUN cd bpf-firewall && \
+RUN \
     ./build.sh 4.18.20 4 && \
     ./build.sh 5.0.21 5 && \
     ./build.sh 5.3.18 5 && \
