@@ -6,7 +6,7 @@ use tezos_encoding::{
     binary_reader::{BinaryReader, BinaryReaderError},
     de,
     has_encoding,
-    encoding::{Encoding, HasEncoding, Tag, TagMap},
+    encoding::{Encoding, HasEncoding, Tag, TagMap, Field},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -23,7 +23,7 @@ pub enum Error {
     WrongTag(u8),
     AddrParse(AddrParseError),
     Io(io::Error),
-    Deserialization,
+    Deserialization(de::Error),
 }
 
 impl From<io::Error> for Error {
@@ -39,7 +39,10 @@ impl Command {
             CommandInner::Unblock(s) => Command::Unblock(s.parse().map_err(Error::AddrParse)?),
             CommandInner::FilterLocalPort(p) => Command::FilterLocalPort(p),
             CommandInner::FilterRemoteAddr(s) => Command::FilterRemoteAddr(s.parse().map_err(Error::AddrParse)?),
-            CommandInner::Disconnected(s, pk) => Command::Disconnected(s.parse().map_err(Error::AddrParse)?, pk),
+            CommandInner::Disconnected(Disconnected {
+                address,
+                public_key,
+            }) => Command::Disconnected(address.parse().map_err(Error::AddrParse)?, public_key),
         })
     }
 }
@@ -50,7 +53,13 @@ enum CommandInner {
     Unblock(String),
     FilterLocalPort(u16),
     FilterRemoteAddr(String),
-    Disconnected(String, [u8; 32]),
+    Disconnected(Disconnected),
+}
+
+#[derive(Deserialize, Serialize)]
+struct Disconnected {
+    address: String,
+    public_key: [u8; 32],
 }
 
 has_encoding!(CommandInner, COMMAND_ENCODING, {
@@ -61,7 +70,10 @@ has_encoding!(CommandInner, COMMAND_ENCODING, {
             Tag::new(0x02, "Unblock", Encoding::String),
             Tag::new(0x03, "FilterLocalPort", Encoding::Uint16),
             Tag::new(0x04, "FilterRemoteAddr", Encoding::String),
-            Tag::new(0x05, "Disconnected", Encoding::Tup(vec![Encoding::String, Encoding::sized(32, Encoding::Bytes)])),
+            Tag::new(0x05, "Disconnected", Encoding::Obj(vec![
+                Field::new("address", Encoding::String),
+                Field::new("public_key", Encoding::sized(32, Encoding::Bytes)),
+            ])),
         ]),
     )
 });
@@ -78,7 +90,10 @@ impl Decoder for CommandDecoder {
             Ok(value) => {
                 src.advance(len);
                 de::from_value(&value)
-                    .map_err(|_| Error::Deserialization)
+                    .map_err(|e| match e {
+                        BinaryReaderError::DeserializationError { error } => Error::Deserialization(error),
+                        _ => unreachable!(),
+                    })
                     .and_then(Command::from_inner)
                     .map(Some)
             },
@@ -87,8 +102,8 @@ impl Decoder for CommandDecoder {
                 self.decode(&mut data)
             },
             Err(BinaryReaderError::Underflow { .. }) => Ok(None),
-            Err(BinaryReaderError::DeserializationError { .. }) => 
-                Err(Error::Deserialization),
+            Err(BinaryReaderError::DeserializationError { error }) => 
+                Err(Error::Deserialization(error)),
             Err(BinaryReaderError::UnsupportedTag { tag }) =>
                 Err(Error::WrongTag(tag as u8)),
         }
@@ -97,14 +112,13 @@ impl Decoder for CommandDecoder {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{Ipv4Addr, IpAddr};
+    use std::{net::{Ipv4Addr, IpAddr}, convert::TryFrom};
     use bytes::BytesMut;
     use tokio_util::codec::Decoder;
     use super::{CommandDecoder, Command};
 
     #[test]
     fn basic() {
-    
         let mut data = vec![1, 0, 0, 0, 9];
         data.extend_from_slice(b"127.0.0.1");
     
@@ -132,6 +146,16 @@ mod tests {
     }
     
     #[test]
-    fn disconnect() {
+    fn disconnected() {
+        let mut data = vec![5, 0, 0, 0, 20];
+        let addr = "123.145.167.189:1234";
+        let pk = b"abcdefghijklmnopqrstuvwxyz012345";
+        data.extend_from_slice(addr.as_bytes());
+        data.extend_from_slice(pk);
+
+        let mut b = BytesMut::from(data.as_slice());
+        let c = CommandDecoder.decode(&mut b);
+        assert_eq!(c.unwrap().unwrap(), Command::Disconnected(addr.parse().unwrap(), <&[u8; 32]>::try_from(pk).unwrap().clone()));
+        assert_eq!(b.as_ref(), b"");
     }
 }
