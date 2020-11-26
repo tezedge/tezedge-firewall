@@ -2,7 +2,7 @@
 #![no_main]
 
 use redbpf_probes::xdp::prelude::*;
-use xdp_module::{Endpoint, EndpointPair, Event, Status, PowBytes, Peer};
+use xdp_module::{Endpoint, EndpointPair, Status, Event, EventInner};
 
 program!(0xFFFFFFFE, "GPL");
 
@@ -18,7 +18,7 @@ static mut blacklist: HashMap<[u8; 4], u32> = HashMap::with_max_entries(0x400);
 
 /// simultaneous 1024 connections maximum
 #[map("peers")]
-static mut peers: HashMap<[u8; 32], Peer> = HashMap::with_max_entries(0x400);
+static mut peers: HashMap<[u8; 32], Endpoint> = HashMap::with_max_entries(0x400);
 
 #[map("pending_peers")]
 static mut pending_peers: HashMap<Endpoint, MapVoid> = HashMap::with_max_entries(0x400);
@@ -27,7 +27,7 @@ static mut pending_peers: HashMap<Endpoint, MapVoid> = HashMap::with_max_entries
 static mut node: HashMap<u16, MapVoid> = HashMap::with_max_entries(1);
 
 #[map("status")]
-static mut status_map: HashMap<EndpointPair, Status> = HashMap::with_max_entries(0x10000);
+static mut status_map: HashMap<EndpointPair, Status> = HashMap::with_max_entries(0x1000);
 
 #[xdp]
 pub fn firewall(ctx: XdpContext) -> XdpResult {
@@ -47,57 +47,84 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             },
         };
 
-        // retrieve the status for given remote ip
-        /*let mut status = match unsafe { blacklist.get(&pair.remote.ipv4) } {
-            Some(st) => st.clone(),
-            _ => Status::empty(),
+        // check if blacklisted
+        if unsafe { blacklist.get(&pair.remote.ipv4) }.is_some() {
+            return Ok(XdpAction::Drop);
+        }
+
+        // check if ours message
+        let incoming = unsafe { node.get(&u16::from_be_bytes(pair.local.port.clone())) }.is_some();
+        if !incoming {
+            return Ok(XdpAction::Pass);
+        }
+        let outgoing = unsafe { pending_peers.get(&pair.remote) }.is_some();
+        if !outgoing {
+            return Ok(XdpAction::Pass);
+        }
+
+        // check if packet has payload
+        let ethernet_hrd_len = 14usize;
+        let ipv4_hrd_len = ((*ipv4).ihl() * 4) as usize;
+        let tcp_hrd_len = ((*tcp).doff() * 4) as usize;
+        let headers_length = ethernet_hrd_len + ipv4_hrd_len + tcp_hrd_len;
+        let has_payload = headers_length < ctx.data_end() - ctx.data_start();
+        if !has_payload {
+            return Ok(XdpAction::Pass);
+        }
+
+        // check if first message of the connection
+        let mut status = unsafe { status_map.get(&pair) }.cloned().unwrap_or(Status::empty());
+        if status.contains(Status::POW_SENT) {
+            return Ok(XdpAction::Pass);
+        }
+        status.insert(Status::POW_SENT);
+
+        // initialize event structure
+        let mut event = Event {
+            pair: pair.clone(),
+            event: EventInner::ReceivedPow([0; 56]),
         };
 
-        let mut pow_bytes = PowBytes::Bytes([0; 56]);
-        if !status.contains(Status::POW_SENT) {
-            let headers_length = 14 + (((*ipv4).ihl() * 4) as usize) + (((*tcp).doff() * 4) as usize);
-            if headers_length < ctx.data_end() - ctx.data_start() {
-                let offset = ctx.data_start() + headers_length;
-                if let Ok(data) = unsafe { ctx.ptr_at::<[u8; 60]>(offset) } {
-                    let data = &unsafe { &*data }[4..];
-                    match &mut pow_bytes {
-                        &mut PowBytes::Bytes(ref mut b) => b.clone_from_slice(data),
+        if let Ok(data) = unsafe { ctx.ptr_at::<[u8; 60]>(ctx.data_start() + headers_length) } {
+            // first payload is big enough to read proof of work
+            let pow_data = &unsafe { &*data }[4..];
+            let mut public_key = [0; 32];
+            public_key.clone_from_slice(&pow_data[..32]);
+            match unsafe { peers.get(&public_key) } {
+                // have no such peer connected, let's check its proof of work
+                None => {
+                    match &mut event.event {
+                        &mut EventInner::ReceivedPow(ref mut b) => b.clone_from_slice(pow_data),
                         _ => unreachable!(),
                     }
-                } else {
-                    pow_bytes = PowBytes::NotEnough;
-                }
-                status.set(Status::POW_SENT, true);
-            } else {
-                pow_bytes = PowBytes::Nothing;
+                    unsafe { peers.set(&public_key, &pair.remote) };
+                },
+                // have such peer connected, let's ban him
+                Some(endpoint) => {
+                    event.event = EventInner::BlockedReusingPow {
+                        already_connected: endpoint.clone(),
+                        try_connect: pair.remote.clone(),
+                    };
+                    status.insert(Status::BLOCKED);
+                },
             }
+            
         } else {
-            pow_bytes = PowBytes::Nothing;
+            // first payload is too small, should not happens
+            event.event = EventInner::NotEnoughBytesForPow;
+            status.insert(Status::BLOCKED);
         }
 
         unsafe {
-            match status_map.get(&pair) {
-                // status is the same, do nothing
-                Some(st) if status.eq(st) => (),
-                // status is changed, update status in status map and notify the userspace
-                _ => {
-                    blacklist.set(&pair.remote.ipv4, &status);
-                    status_map.set(&pair, &status);
-                    let event = Event {
-                        pair: pair,
-                        new_status: status.clone(),
-                        pow_bytes: pow_bytes,
-                    };
-                    events.insert(&ctx, &MapData::new(event));
-                }
-            }
+            status_map.set(&pair, &status);
+            events.insert(&ctx, &MapData::new(event));
         }
 
         if status.contains(Status::BLOCKED) {
             Ok(XdpAction::Drop)
         } else {
             Ok(XdpAction::Pass)
-        }*/Ok(XdpAction::Pass)
+        }
     } else {
         // not TCP
         Ok(XdpAction::Pass)

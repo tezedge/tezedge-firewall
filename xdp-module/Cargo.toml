@@ -10,15 +10,15 @@ path = "src/bin/main.rs"
 required-features = ["probes"]
 
 [dependencies]
-redbpf-macros = { path = "../redbpf/redbpf-macros", default-features = false }
-redbpf-probes = { path = "../redbpf/redbpf-probes", default-features = false }
-#redbpf-macros = { version = "1.2", default-features = false }
-#redbpf-probes = { version = "1.2", default-features = false }
+#redbpf-macros = { path = "../redbpf/redbpf-macros", default-features = false }
+#redbpf-probes = { path = "../redbpf/redbpf-probes", default-features = false }
+redbpf-macros = { version = "1.2", default-features = false }
+redbpf-probes = { version = "1.2", default-features = false }
 bitflags = "1.2"
 
 [build-dependencies]
-cargo-bpf = { path = "../redbpf/cargo-bpf", default-features = false, features = ["bindings"] }
-#cargo-bpf = { version = "1.2", default-features = false, features = ["bindings"] }
+#cargo-bpf = { path = "../redbpf/cargo-bpf", default-features = false, features = ["bindings"] }
+cargo-bpf = { version = "1.2", default-features = false, features = ["bindings"] }
 
 [features]
 probes = []

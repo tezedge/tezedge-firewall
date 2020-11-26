@@ -1,12 +1,5 @@
 #![no_std]
 
-#[derive(Clone)]
-#[repr(u32)]
-pub enum Peer {
-    Uncertain(Endpoint),
-    Valid(Endpoint),
-}
-
 #[derive(Debug, Clone)]
 pub struct EndpointPair {
     pub remote: Endpoint,
@@ -23,8 +16,18 @@ pub struct Endpoint {
 #[derive(Debug, Clone)]
 pub struct Event {
     pub pair: EndpointPair,
-    pub new_status: Status,
-    pub pow_bytes: PowBytes,
+    pub event: EventInner,
+}
+
+#[derive(Clone)]
+#[repr(u32)]
+pub enum EventInner {
+    ReceivedPow([u8; 56]),
+    NotEnoughBytesForPow,
+    BlockedReusingPow {
+        already_connected: Endpoint,
+        try_connect: Endpoint,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,14 +36,6 @@ pub enum BlockingReason {
     CommandLineArgument,
     BadProofOfWork,
     EventFromTezedge,
-}
-
-#[derive(Clone)]
-#[repr(u32)]
-pub enum PowBytes {
-    Nothing,
-    NotEnough,
-    Bytes([u8; 56]),
 }
 
 bitflags::bitflags! {
@@ -52,7 +47,7 @@ bitflags::bitflags! {
 
 mod implementations {
     use core::{fmt, convert::{TryFrom, TryInto}};
-    use super::{EndpointPair, Endpoint, PowBytes};
+    use super::{EndpointPair, Endpoint, EventInner};
 
     impl From<EndpointPair> for [u8; 12] {
         fn from(v: EndpointPair) -> Self {
@@ -98,46 +93,63 @@ mod implementations {
         }
     }
 
-    impl fmt::Debug for PowBytes {
+    impl fmt::Debug for EventInner {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                &PowBytes::Nothing => f.debug_tuple("Nothing").finish(),
-                &PowBytes::NotEnough => f.debug_tuple("NotEnough").finish(),
-                &PowBytes::Bytes(ref b) => {
-                    b.as_ref().into_iter().fold(&mut f.debug_tuple("Bytes"), |d, b| d.field(b)).finish()
+                &EventInner::ReceivedPow(ref b) => {
+                    b.as_ref().into_iter().fold(&mut f.debug_tuple("ReceivedPow"), |d, b| d.field(b)).finish()
+                },
+                &EventInner::NotEnoughBytesForPow => f.debug_tuple("NotEnoughBytesForPow").finish(),
+                &EventInner::BlockedReusingPow {
+                    ref already_connected,
+                    ref try_connect,
+                } => {
+                    f.debug_struct("BlockedReusingPow")
+                        .field("already_connected", already_connected)
+                        .field("try_connect", try_connect)
+                        .finish()
                 },
             }
         }
     }
 
-    impl From<PowBytes> for [u8; 60] {
-        fn from(v: PowBytes) -> Self {
+    impl From<EventInner> for [u8; 60] {
+        fn from(v: EventInner) -> Self {
             let mut r = [0; 60];
             match v {
-                PowBytes::Nothing => [0; 60],
-                PowBytes::NotEnough => {
-                    r[0..4].clone_from_slice(1u32.to_le_bytes().as_ref());
-                    r
-                },
-                PowBytes::Bytes(b) => {
-                    r[0..4].clone_from_slice(2u32.to_le_bytes().as_ref());
+                EventInner::ReceivedPow(b) => {
+                    r[0..4].clone_from_slice(0u32.to_le_bytes().as_ref());
                     r[4..].clone_from_slice(b.as_ref());
                     r
                 },
+                EventInner::NotEnoughBytesForPow => {
+                    r[0..4].clone_from_slice(1u32.to_le_bytes().as_ref());
+                    r
+                },
+                EventInner::BlockedReusingPow { already_connected, try_connect } => {
+                    r[0..4].clone_from_slice(2u32.to_le_bytes().as_ref());
+                    r[4..10].clone_from_slice(<[u8; 6]>::from(already_connected).as_ref());
+                    r[10..16].clone_from_slice(<[u8; 6]>::from(try_connect).as_ref());
+                    r
+                },
             }
         }
     }
 
-    impl From<[u8; 60]> for PowBytes {
+    impl From<[u8; 60]> for EventInner {
         fn from(r: [u8; 60]) -> Self {
             let d = u32::from_le_bytes(r[0..4].try_into().unwrap());
             match d {
-                0 => PowBytes::Nothing,
-                1 => PowBytes::NotEnough,
-                2 => {
+                0 => {
                     let mut b = [0; 56];
                     b.clone_from_slice(&r[4..]);
-                    PowBytes::Bytes(b)
+                    EventInner::ReceivedPow(b)
+                },
+                1 => EventInner::NotEnoughBytesForPow,
+                2 => {
+                    let already_connected = <[u8; 6]>::try_from(&r[4..10]).unwrap().into();
+                    let try_connect = <[u8; 6]>::try_from(&r[10..16]).unwrap().into();
+                    EventInner::BlockedReusingPow { already_connected, try_connect }
                 },
                 _ => panic!(),
             }

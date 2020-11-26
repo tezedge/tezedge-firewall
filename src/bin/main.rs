@@ -2,7 +2,7 @@
 
 use structopt::StructOpt;
 use crypto::proof_of_work::check_proof_of_work;
-use xdp_module::{Event, Status, PowBytes, BlockingReason, Endpoint, Peer};
+use xdp_module::{Event, EventInner, BlockingReason, Endpoint};
 use redbpf::{
     load::Loader,
     xdp::Flags,
@@ -51,15 +51,12 @@ where
                     let module = module.lock().await;
                     with_map_ref(&module, "blacklist", |map| {
                         let ip = event.pair.remote.ipv4;
-                        match &event.pow_bytes {
-                            PowBytes::Nothing => (),
-                            PowBytes::NotEnough => {
-                                block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork)
-                            },
-                            PowBytes::Bytes(b) => match check_proof_of_work(b, target) {
+                        match &event.event {
+                            EventInner::ReceivedPow(b) => match check_proof_of_work(b, target) {
                                 Ok(()) => (),
                                 Err(()) => block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork),
                             },
+                            _ => (),
                         }
                     });
                 },
@@ -115,11 +112,8 @@ async fn main() {
 
     with_map_ref(&loaded.module, "blacklist", |map| {
         for block in blacklist {
-            let mut ip = [0, 0, 0, 0];
-            for (i, b) in block.split('.').map(|s| s.parse::<u8>().unwrap()).enumerate() {
-                ip[i] = b;
-            }
-            map.set(ip, Status::BLOCKED);
+            let ip = block.parse::<Ipv4Addr>().unwrap();
+            map.set(ip.octets(), 0);
         }
     });
 
@@ -176,7 +170,7 @@ async fn main() {
                             })
                         },
                         Command::Disconnected(SocketAddr::V4(_), pk) => {
-                            with_map_ref::<_, [u8; 32], Peer>(&module, "peers", |map| {
+                            with_map_ref::<_, [u8; 32], Endpoint>(&module, "peers", |map| {
                                 map.delete(pk)
                             })
                         },
