@@ -1,10 +1,12 @@
-use std::{net::{IpAddr, SocketAddr, AddrParseError}, io};
+use std::{net::{IpAddr, SocketAddr, AddrParseError}, io, string::ToString};
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::Decoder;
 use bytes::{BytesMut, Buf};
 use tezos_encoding::{
     binary_reader::{BinaryReader, BinaryReaderError},
+    binary_writer,
     de,
+    ser,
     has_encoding,
     encoding::{Encoding, HasEncoding, Tag, TagMap, Field},
 };
@@ -44,6 +46,20 @@ impl Command {
                 public_key,
             }) => Command::Disconnected(address.parse().map_err(Error::AddrParse)?, public_key),
         })
+    }
+
+    pub fn as_bytes(&self) -> Result<Vec<u8>, ser::Error> {
+        let inner = match self {
+            Command::Block(s) => CommandInner::Block(s.to_string()),
+            Command::Unblock(s) => CommandInner::Unblock(s.to_string()),
+            Command::FilterLocalPort(p) => CommandInner::FilterLocalPort(*p),
+            Command::FilterRemoteAddr(s) => CommandInner::FilterRemoteAddr(s.to_string()),
+            Command::Disconnected(s, public_key) => CommandInner::Disconnected(Disconnected {
+                address: s.to_string(),
+                public_key: public_key.clone(),
+            }),
+        };
+        binary_writer::write(&inner, &CommandInner::encoding())
     }
 }
 

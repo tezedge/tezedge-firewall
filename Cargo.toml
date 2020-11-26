@@ -11,6 +11,10 @@ edition = "2018"
 name = "firewall"
 path = "src/bin/main.rs"
 
+[[bin]]
+name = "fw"
+path = "src/bin/client.rs"
+
 [dependencies]
 structopt = "0.3"
 libc = "0.2"
