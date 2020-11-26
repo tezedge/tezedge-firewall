@@ -61,7 +61,7 @@ has_encoding!(CommandInner, COMMAND_ENCODING, {
             Tag::new(0x02, "Unblock", Encoding::String),
             Tag::new(0x03, "FilterLocalPort", Encoding::Uint16),
             Tag::new(0x04, "FilterRemoteAddr", Encoding::String),
-            Tag::new(0x05, "Disconnected", Encoding::String),
+            Tag::new(0x05, "Disconnected", Encoding::Tup(vec![Encoding::String, Encoding::sized(32, Encoding::Bytes)])),
         ]),
     )
 });
@@ -96,32 +96,42 @@ impl Decoder for CommandDecoder {
 }
 
 #[cfg(test)]
-#[test]
-fn basic() {
-    use std::net::Ipv4Addr;
+mod tests {
+    use std::net::{Ipv4Addr, IpAddr};
+    use bytes::BytesMut;
+    use tokio_util::codec::Decoder;
+    use super::{CommandDecoder, Command};
 
-    let mut data = vec![1, 0, 0, 0, 9];
-    data.extend_from_slice(b"127.0.0.1");
-
-    // correct
-    let mut b = BytesMut::from(data.as_slice());
-    let c = CommandDecoder.decode(&mut b);
-    assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
-    assert_eq!(b.as_ref(), b"");
-
-    // overflow
-    data.extend_from_slice(b"overflow");
-    let mut b = BytesMut::from(data.as_slice());
-    let c = CommandDecoder.decode(&mut b);
-    assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
-    assert_eq!(b.as_ref(), b"overflow");
-
-    let mut data = vec![1, 0, 0, 0, 9];
-    data.extend_from_slice(b"127.0.0");
-
-    // underflow
-    let mut b = BytesMut::from(data.as_slice());
-    let c = CommandDecoder.decode(&mut b);
-    assert!(c.unwrap().is_none());
-    assert_eq!(hex::encode(b.as_ref()), format!("0100000009{}", hex::encode("127.0.0")));
+    #[test]
+    fn basic() {
+    
+        let mut data = vec![1, 0, 0, 0, 9];
+        data.extend_from_slice(b"127.0.0.1");
+    
+        // correct
+        let mut b = BytesMut::from(data.as_slice());
+        let c = CommandDecoder.decode(&mut b);
+        assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        assert_eq!(b.as_ref(), b"");
+    
+        // overflow
+        data.extend_from_slice(b"overflow");
+        let mut b = BytesMut::from(data.as_slice());
+        let c = CommandDecoder.decode(&mut b);
+        assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        assert_eq!(b.as_ref(), b"overflow");
+    
+        let mut data = vec![1, 0, 0, 0, 9];
+        data.extend_from_slice(b"127.0.0");
+    
+        // underflow
+        let mut b = BytesMut::from(data.as_slice());
+        let c = CommandDecoder.decode(&mut b);
+        assert!(c.unwrap().is_none());
+        assert_eq!(hex::encode(b.as_ref()), format!("0100000009{}", hex::encode("127.0.0")));
+    }
+    
+    #[test]
+    fn disconnect() {
+    }
 }
