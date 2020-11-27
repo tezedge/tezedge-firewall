@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-wget -cq https://cdn.kernel.org/pub/linux/kernel/v$2.x/linux-$1.tar.xz
+wget -cq https://cdn.kernel.org/pub/linux/kernel/v${1%.*.*}.x/linux-$1.tar.xz
 tar -xf linux-$1.tar.xz
 pushd linux-$1
 make defconfig

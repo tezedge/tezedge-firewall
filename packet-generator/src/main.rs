@@ -6,6 +6,7 @@ use tezos_messages::p2p::{
         connection::ConnectionMessage,
         version::NetworkVersion,
         metadata::MetadataMessage,
+        ack::AckMessage,
     },
     binary_message::{BinaryMessage, BinaryChunk},
 };
@@ -21,22 +22,39 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
-    let Opts { address, identity } = Opts::from_args();
+    let Opts { address, identity } = StructOpt::from_args();
 
-    let mut s = TcpStream::connect(address.clone()).await?;
-    let decipher = handshake(&mut s, identity).await.unwrap();
-    let m = MetadataMessage::new(false, false);
-    match write_message(&decipher, 0, &mut s, &[m]).await {
+    match handshake(address, identity).await {
         Ok(()) => println!("done handshake"),
-        Err(e) => println!("blocked {:?}", e),
+        Err(e) => println!("error during handshake: \"{}\"", e),
     }
 
     Ok(())
 }
 
-async fn handshake(stream: &mut TcpStream, identity_path: String) -> Result<Decipher, io::Error> {
-    let identity = Identity::from_path(identity_path).unwrap();
+async fn handshake(address: String, identity_path: String) -> Result<(), io::Error> {
+    let identity = Identity::from_path(identity_path.clone()).unwrap();
+    let mut s = TcpStream::connect(address.clone()).await?;
 
+    println!(
+        "try handshake, identity_path: {}, attacker_address: {}, node_address: {}",
+        identity_path,
+        s.local_addr()?,
+        s.peer_addr()?,
+    );
+
+    let decipher = connection(&mut s, identity).await?;
+    let m = MetadataMessage::new(false, false);
+    write_message(&decipher, 0, &mut s, &[m]).await?;
+    let _ = read_message::<_, MetadataMessage>(&decipher, 0, &mut s).await?;
+    let m = AckMessage::Ack;
+    write_message(&decipher, 1, &mut s, &[m]).await?;
+    let _ = read_message::<_, AckMessage>(&decipher, 1, &mut s).await?;
+
+    Ok(())
+}
+
+async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Decipher, io::Error> {
     let chain_name = "TEZOS_ALPHANET_CARTHAGE_2019-11-28T13:02:13Z".to_string();
     let version = NetworkVersion::new(chain_name, 0, 1);
     let connection_message = ConnectionMessage::new(
@@ -102,4 +120,32 @@ where
         .write_all(chunks.as_ref())
         .await?;
     Ok(())
+}
+
+pub async fn read_message<T, M>(
+    decipher: &Decipher,
+    counter: u64,
+    stream: &mut T,
+) -> Result<M, io::Error>
+where
+    T: Unpin + AsyncReadExt,
+    M: BinaryMessage,
+{
+    let mut size_buf = [0; 2];
+    stream
+        .read_exact(size_buf.as_mut())
+        .await?;
+    let size = u16::from_be_bytes(size_buf) as usize;
+    let mut chunk = [0; 0x10000];
+    stream
+        .read_exact(&mut chunk[..size])
+        .await?;
+
+    let bytes = decipher.decrypt(&chunk[..size], NonceAddition::Responder(counter))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("crypto error: {}", e)))?;
+
+    let message = M::from_bytes(bytes)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("reader error: {}", e)))?;
+
+    Ok(message)
 }

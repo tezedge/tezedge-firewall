@@ -120,7 +120,7 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
                 },
                 // have such peer connected, let's block him
                 Some(endpoint) => {
-                    event.event = EventInner::BlockedReusingPow {
+                    event.event = EventInner::BlockedAlreadyConnected {
                         already_connected: endpoint.clone(),
                         try_connect: pair.remote.clone(),
                     };

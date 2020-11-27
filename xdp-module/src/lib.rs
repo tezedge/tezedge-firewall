@@ -24,7 +24,7 @@ pub struct Event {
 pub enum EventInner {
     ReceivedPow([u8; 56]),
     NotEnoughBytesForPow,
-    BlockedReusingPow {
+    BlockedAlreadyConnected {
         already_connected: Endpoint,
         try_connect: Endpoint,
     },
@@ -35,6 +35,7 @@ pub enum BlockingReason {
     NoBlocking,
     CommandLineArgument,
     BadProofOfWork,
+    AlreadyConnected,
     EventFromTezedge,
 }
 
@@ -100,11 +101,11 @@ mod implementations {
                     b.as_ref().into_iter().fold(&mut f.debug_tuple("ReceivedPow"), |d, b| d.field(b)).finish()
                 },
                 &EventInner::NotEnoughBytesForPow => f.debug_tuple("NotEnoughBytesForPow").finish(),
-                &EventInner::BlockedReusingPow {
+                &EventInner::BlockedAlreadyConnected {
                     ref already_connected,
                     ref try_connect,
                 } => {
-                    f.debug_struct("BlockedReusingPow")
+                    f.debug_struct("BlockedAlreadyConnected")
                         .field("already_connected", already_connected)
                         .field("try_connect", try_connect)
                         .finish()
@@ -126,7 +127,7 @@ mod implementations {
                     r[0..4].clone_from_slice(1u32.to_le_bytes().as_ref());
                     r
                 },
-                EventInner::BlockedReusingPow { already_connected, try_connect } => {
+                EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
                     r[0..4].clone_from_slice(2u32.to_le_bytes().as_ref());
                     r[4..10].clone_from_slice(<[u8; 6]>::from(already_connected).as_ref());
                     r[10..16].clone_from_slice(<[u8; 6]>::from(try_connect).as_ref());
@@ -149,7 +150,7 @@ mod implementations {
                 2 => {
                     let already_connected = <[u8; 6]>::try_from(&r[4..10]).unwrap().into();
                     let try_connect = <[u8; 6]>::try_from(&r[10..16]).unwrap().into();
-                    EventInner::BlockedReusingPow { already_connected, try_connect }
+                    EventInner::BlockedAlreadyConnected { already_connected, try_connect }
                 },
                 _ => panic!(),
             }

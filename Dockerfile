@@ -31,8 +31,10 @@ COPY . /root/bpf-firewall
 WORKDIR /root/bpf-firewall
 
 RUN \
-    ./scripts/build.sh 4.18.20 4 && \
-    ./scripts/build.sh 5.0.21 5 && \
-    ./scripts/build.sh 5.3.18 5 && \
-    ./scripts/build.sh 5.4.80 5 && \
-    ./scripts/build.sh 5.8.18 5
+    ./scripts/build.sh 4.18.20 && \
+    ./scripts/build.sh 5.0.21 && \
+    ./scripts/build.sh 5.3.18 && \
+    ./scripts/build.sh 5.4.80 && \
+    ./scripts/build.sh 5.8.18
+
+CMD ./scripts/run.sh -d eth0

@@ -56,7 +56,12 @@ where
                                 Ok(()) => (),
                                 Err(()) => block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork),
                             },
-                            _ => (),
+                            EventInner::NotEnoughBytesForPow => {
+                                block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork)
+                            },
+                            EventInner::BlockedAlreadyConnected { .. } => {
+                                block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected)
+                            }
                         }
                     });
                 },
