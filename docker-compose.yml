@@ -9,7 +9,7 @@ services:
     volumes:
       - "storage:/tmp"
     # TODO:
-    entrypoint: sh -c "./firewall-5.0.21 -d eth0 & sleep 1 && ./fw node 9732 && sleep inf"
+    entrypoint: sh -c "./firewall-5.8.18 -d eth0 & sleep 1 && ./fw node 9732 && sleep inf"
 
   rust-node:
     image: simplestakingcom/tezedge:v0.5.0
@@ -30,7 +30,7 @@ services:
       - firewall-network
     volumes:
       - "storage:/tmp"
-    entrypoint: sh -c "./target/debug/packet-generator --address firewall:9732"
+    entrypoint: sh -c "./scripts/packet_generator.sh firewall 9732"
 
 volumes:
   storage:

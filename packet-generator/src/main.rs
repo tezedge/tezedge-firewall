@@ -1,6 +1,6 @@
 use std::{io, convert::TryFrom};
 use structopt::StructOpt;
-use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}, time};
+use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}};
 use tezos_messages::p2p::{
     encoding::{
         connection::ConnectionMessage,
@@ -15,32 +15,20 @@ use tezos_conversation::{Identity, Decipher, NonceAddition};
 struct Opts {
     #[structopt(long, help = "Address at the tap interface")]
     address: String,
+    #[structopt(long, help = "Identity json file")]
+    identity: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
-    let Opts { address } = Opts::from_args();
-
-    let mut s = loop {
-        match TcpStream::connect(address.clone()).await {
-            Ok(s) => break s,
-            Err(_) => {
-                println!("wait 5 seconds");
-                let _ = time::sleep(time::Duration::new(5, 0)).await;
-            },
-        }
-    };
-
-    let decipher = handshake(&mut s, "identity_good.json".to_string()).await.unwrap();
-    let m = MetadataMessage::new(false, false);
-    write_message(&decipher, 0, &mut s, &[m]).await?;
+    let Opts { address, identity } = Opts::from_args();
 
     let mut s = TcpStream::connect(address.clone()).await?;
-    let decipher = handshake(&mut s, "identity_bad.json".to_string()).await.unwrap();
+    let decipher = handshake(&mut s, identity).await.unwrap();
     let m = MetadataMessage::new(false, false);
     match write_message(&decipher, 0, &mut s, &[m]).await {
-        Ok(()) => println!("FAIL: should be blocked"),
-        Err(e) => println!("OK: the message is blocked, error is {:?}", e),
+        Ok(()) => println!("done handshake"),
+        Err(e) => println!("blocked {:?}", e),
     }
 
     Ok(())

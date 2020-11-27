@@ -47,18 +47,37 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             },
         };
 
-        // check if blacklisted
+        // check if already blacklisted
         if unsafe { blacklist.get(&pair.remote.ipv4) }.is_some() {
             return Ok(XdpAction::Drop);
         }
 
+        // this code might look obscure
+        // it should be:
+        //      `let incoming = unsafe { node.get(&port) }.is_some();`
+        //      `let outgoing = unsafe { pending_peers.get(&pair.remote) }.is_some();`
+        //      `let ours = incoming || outgoing`
+        // but actually `HashMap::get` returns pointer and
+        // llvm optimize `incoming` and `outgoing` to be not boolean, but pointers
+        // and `pointer || pointer` is forbidden operation,
+        // let's compare pointer with 3 to force it to be boolean
+
         // check if ours message
-        let incoming = unsafe { node.get(&u16::from_be_bytes(pair.local.port.clone())) }.is_some();
-        if !incoming {
-            return Ok(XdpAction::Pass);
-        }
-        let outgoing = unsafe { pending_peers.get(&pair.remote) }.is_some();
-        if !outgoing {
+        let incoming = unsafe {
+            let port = u16::from_be_bytes(pair.local.port.clone());
+            bpf_map_lookup_elem(
+                &mut node as *mut _ as *mut c_void,
+                &port as *const _ as *const c_void,
+            ) as usize
+        } > 3;
+        let outgoing = unsafe {
+            bpf_map_lookup_elem(
+                &mut pending_peers as *mut _ as *mut c_void,
+                &pair.remote as *const _ as *const c_void,
+            ) as usize
+        } > 3;
+        let ours = incoming || outgoing;
+        if !ours {
             return Ok(XdpAction::Pass);
         }
 
@@ -72,7 +91,7 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             return Ok(XdpAction::Pass);
         }
 
-        // check if first message of the connection
+        // check if it is the first payload of the connection
         let mut status = unsafe { status_map.get(&pair) }.cloned().unwrap_or(Status::empty());
         if status.contains(Status::POW_SENT) {
             return Ok(XdpAction::Pass);
@@ -99,7 +118,7 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
                     }
                     unsafe { peers.set(&public_key, &pair.remote) };
                 },
-                // have such peer connected, let's ban him
+                // have such peer connected, let's block him
                 Some(endpoint) => {
                     event.event = EventInner::BlockedReusingPow {
                         already_connected: endpoint.clone(),
@@ -110,7 +129,7 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
             }
             
         } else {
-            // first payload is too small, should not happens
+            // first payload is too small, should not happens for tezos connection message
             event.event = EventInner::NotEnoughBytesForPow;
             status.insert(Status::BLOCKED);
         }
