@@ -18,22 +18,31 @@ services:
     volumes:
       - "storage:/tmp"
 
-  test_pow_reuse:
-    build:
-      context: .
-      dockerfile: packet-generator.dockerfile
-    depends_on:
-      - rust-node
-    entrypoint: sh -c "./scripts/test_pow_reuse.sh"
+  ocaml-node:
+    image: tezos/tezos:v7.5
+    hostname: node
+    volumes:
+      - node_data:/var/run/tezos
+    entrypoint: tezos-node
 
-  test_bad_pow:
-    build:
-      context: .
-      dockerfile: packet-generator.dockerfile
-    depends_on:
-      - rust-node
-    entrypoint: sh -c "./scripts/test_bad_pow.sh"
+  #test_pow_reuse:
+  #  build:
+  #    context: .
+  #    dockerfile: packet-generator.dockerfile
+  #  depends_on:
+  #    - rust-node
+  #  entrypoint: sh -c "./scripts/test_pow_reuse.sh"
+
+  #test_bad_pow:
+  #  build:
+  #    context: .
+  #    dockerfile: packet-generator.dockerfile
+  #  depends_on:
+  #    - rust-node
+  #  entrypoint: sh -c "./scripts/test_bad_pow.sh"
 
 volumes:
   storage:
     external: false
+  node_data:
+    external: true
