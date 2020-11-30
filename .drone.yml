@@ -51,3 +51,9 @@ steps:
         path: /tmp/identities
     commands:
       - /tmp/binaries/packet-generator --address=tezedge:9732 --identity=/tmp/identities/identity_bad.json
+
+volumes:
+  - name: binaries
+    temp: {}
+  - name: identities
+    temp: {}
