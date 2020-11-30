@@ -43,6 +43,7 @@ steps:
       - name: binaries
         path: /tmp/binaries
     commands:
+      - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y curl
       - /tmp/binaries/wait_until.sh tezedge
 
   - name: test_bad_pow.sh
