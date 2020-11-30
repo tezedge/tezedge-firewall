@@ -17,6 +17,7 @@ services:
     entrypoint: tezos-node run --rpc-addr 0.0.0.0:8732
 
   test_proof_of_work:
+    image: simplestakingcom/tezedge-firewall-tests:v0.1
     build:
       context: .
       dockerfile: packet-generator.dockerfile

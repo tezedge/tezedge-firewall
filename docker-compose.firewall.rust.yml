@@ -16,6 +16,7 @@ services:
     network_mode: "service:firewall"
 
   test_proof_of_work:
+    image: simplestakingcom/tezedge-firewall-tests:v0.1
     build:
       context: .
       dockerfile: packet-generator.dockerfile
