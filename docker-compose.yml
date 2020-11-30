@@ -2,6 +2,7 @@ version: "3"
 
 services:
   firewall:
+    image: simplestakingcom/tezedge-firewall:v0.1
     build: .
     privileged: true
     volumes:
