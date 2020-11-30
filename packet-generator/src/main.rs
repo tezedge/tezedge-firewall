@@ -20,19 +20,31 @@ struct Opts {
     identity: String,
 }
 
+enum Error {
+    Io(io::Error),
+    Other(Box<dyn std::error::Error>),
+}
+
+impl From<io::Error> for Error {
+    fn from(v: io::Error) -> Self {
+        Error::Io(v)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let Opts { address, identity } = StructOpt::from_args();
 
     match handshake(address, identity).await {
         Ok(()) => println!("done handshake"),
-        Err(e) => println!("error during handshake: \"{}\"", e),
+        Err(Error::Io(_)) => println!("can not connect to remote node"),
+        Err(Error::Other(e)) => println!("{:?}", e),
     }
 
     Ok(())
 }
 
-async fn handshake(address: String, identity_path: String) -> Result<(), io::Error> {
+async fn handshake(address: String, identity_path: String) -> Result<(), Error> {
     let identity = Identity::from_path(identity_path.clone()).unwrap();
     let mut s = TcpStream::connect(address.clone()).await?;
 
@@ -54,7 +66,7 @@ async fn handshake(address: String, identity_path: String) -> Result<(), io::Err
     Ok(())
 }
 
-async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Decipher, io::Error> {
+async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Decipher, Error> {
     let chain_name = "TEZOS_ALPHANET_CARTHAGE_2019-11-28T13:02:13Z".to_string();
     let version = NetworkVersion::new(chain_name, 0, 1);
     let connection_message = ConnectionMessage::new(
@@ -66,7 +78,7 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
     );
     let chunk = connection_message
         .as_bytes()
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
+        .map_err(|e| Error::Other(e.into()))?;
     let initiator_chunk = BinaryChunk::from_content(chunk.as_ref()).unwrap();
     stream
         .write_all(initiator_chunk.raw())
@@ -91,12 +103,12 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
     Ok(decipher)
 }
 
-pub async fn write_message<T, M>(
+async fn write_message<T, M>(
     decipher: &Decipher,
     counter: u64,
     stream: &mut T,
     messages: &[M],
-) -> Result<(), io::Error>
+) -> Result<(), Error>
 where
     T: Unpin + AsyncWriteExt,
     M: BinaryMessage,
@@ -111,7 +123,7 @@ where
         for plain in bytes.chunks(CONTENT_LENGTH_MAX) {
             let chunk = decipher
                 .encrypt(plain, NonceAddition::Initiator(counter))
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Encryption error"))
+                .map_err(|e| Error::Other(format!("{:?}", e).into()))
                 .map(|v| BinaryChunk::from_content(v.as_ref()).unwrap())?;
             chunks.extend_from_slice(chunk.raw());
         }
@@ -122,11 +134,11 @@ where
     Ok(())
 }
 
-pub async fn read_message<T, M>(
+async fn read_message<T, M>(
     decipher: &Decipher,
     counter: u64,
     stream: &mut T,
-) -> Result<M, io::Error>
+) -> Result<M, Error>
 where
     T: Unpin + AsyncReadExt,
     M: BinaryMessage,
@@ -142,10 +154,10 @@ where
         .await?;
 
     let bytes = decipher.decrypt(&chunk[..size], NonceAddition::Responder(counter))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("crypto error: {}", e)))?;
+        .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
 
     let message = M::from_bytes(bytes)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("reader error: {}", e)))?;
+        .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
 
     Ok(message)
 }
