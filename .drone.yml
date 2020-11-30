@@ -19,6 +19,7 @@ steps:
       - ./scripts/build.sh 5.8.18
       - cargo install --path packet-generator --root .
       - cp ./bin/* /tmp/binaries
+      - cp ./scripts/wait_until.sh
       - cp identity_*.json /tmp/identities
 
   - name: tezedge
@@ -39,8 +40,7 @@ steps:
     image: ubuntu:20.04
     pull: if-not-exists
     commands:
-      - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y netcat
-      - while ! nc -z tezedge 9732; do sleep 5; done
+      - /tmp/binaries/wait_until.sh tezedge
 
   - name: test_bad_pow.sh
     image: simplestakingcom/tezedge-ci-builder:latest
