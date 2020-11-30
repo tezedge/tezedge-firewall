@@ -12,8 +12,6 @@ services:
     image: simplestakingcom/tezedge:v0.7.2
     depends_on:
       - firewall
-    logging:
-      driver: "none"
     network_mode: "service:firewall"
     volumes:
       - "storage:/tmp"
