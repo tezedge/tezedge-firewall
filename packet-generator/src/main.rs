@@ -36,8 +36,8 @@ async fn main() -> Result<(), io::Error> {
     let Opts { address, identity } = StructOpt::from_args();
 
     match handshake(address, identity).await {
-        Ok(()) => println!("done handshake"),
-        Err(Error::Io(_)) => println!("can not connect to remote node"),
+        Ok(()) => println!("Done handshake"),
+        Err(Error::Io(_)) => println!("The client cannot connect to the remote node"),
         Err(Error::Other(e)) => println!("{:?}", e),
     }
 
