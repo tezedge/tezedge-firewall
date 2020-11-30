@@ -41,7 +41,7 @@ For example `sudo ~/.cargo/bin/firewall --device enp4s0 -b 51.15.220.7 -b 95.217
 
 ## Docker
 
-Run in docker, should be privileged.
+Run it in docker, it should be privileged.
 ```
 docker run --privileged -d simplestakingcom/tezedge-firewall:0.1
 ```
