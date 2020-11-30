@@ -19,7 +19,7 @@ steps:
       - ./scripts/build.sh 5.8.18
       - cargo install --path packet-generator --root .
       - cp ./bin/* /tmp/binaries
-      - cp ./scripts/wait_until.sh
+      - cp ./scripts/wait_until.sh /tmp/binaries
       - cp identity_*.json /tmp/identities
 
   - name: tezedge
@@ -39,6 +39,9 @@ steps:
   - name: wait_for_tezedge
     image: ubuntu:20.04
     pull: if-not-exists
+    volumes:
+      - name: binaries
+        path: /tmp/binaries
     commands:
       - /tmp/binaries/wait_until.sh tezedge
 
