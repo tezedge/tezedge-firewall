@@ -24,6 +24,7 @@ steps:
   - name: tezedge
     image: simplestakingcom/tezedge:v0.7.2
     pull: if-not-exists
+    detach: true
     volumes:
       - name: binaries
         path: /tmp/binaries
@@ -31,8 +32,15 @@ steps:
       - /tmp/binaries/firewall-5.8.18 $@ &
       - sleep 1
       - /tmp/binaries/fw node 9732
-      - sleep inf
       - /home/appuser/tezedge/docker/full/tezedge.sh
+
+  - name: wait_for_tezedge
+    image: ubuntu:20.04
+    pull: if-not-exists
+    detach: true
+    commands:
+      - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y netcat
+      - while ! nc -z localhost 9732; do sleep 0.5; done
 
   - name: test_bad_pow.sh
     image: simplestakingcom/tezedge-ci-builder:latest
