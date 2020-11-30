@@ -3,7 +3,7 @@
 use std::net::IpAddr;
 use structopt::StructOpt;
 use tokio::{io::AsyncWriteExt, net::UnixStream};
-use firewall::Command;
+use tezedge_firewall::Command;
 
 #[derive(StructOpt)]
 struct Opts {

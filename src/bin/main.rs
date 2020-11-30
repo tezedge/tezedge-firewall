@@ -13,7 +13,7 @@ use std::{env, fs, io, ptr, sync::Arc, net::{SocketAddr, Ipv4Addr, IpAddr}};
 use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex};
 use tokio_util::codec::Framed;
 
-use firewall::{CommandDecoder, Command};
+use tezedge_firewall::{CommandDecoder, Command};
 
 #[derive(StructOpt)]
 struct Opts {

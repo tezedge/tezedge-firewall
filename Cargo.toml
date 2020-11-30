@@ -2,7 +2,7 @@
 members = [".", "xdp-module", "packet-generator"]
 
 [package]
-name = "firewall"
+name = "tezedge-firewall"
 version = "0.1.0"
 authors = ["Vladislav Melnik <vladislav.melnik@simplestaking.com>"]
 edition = "2018"

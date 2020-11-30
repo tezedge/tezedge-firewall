@@ -27,8 +27,8 @@ ENV LLVM_SYS_110_PREFIX=/usr/lib/llvm-11
 # firewall
 RUN apt install -y libarchive-tools flex bison libssl-dev bc libelf-dev
 
-COPY . /root/bpf-firewall
-WORKDIR /root/bpf-firewall
+COPY . /root/tezedge-firewall
+WORKDIR /root/tezedge-firewall
 
 RUN \
     #./scripts/build.sh 4.18.20 && \
