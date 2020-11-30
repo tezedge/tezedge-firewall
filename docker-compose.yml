@@ -2,13 +2,11 @@ version: "3"
 
 services:
   firewall:
-    build:
-      context: .
-      args:
-        COMPLEXITY: 26.0
+    build: .
     privileged: true
     volumes:
       - "storage:/tmp"
+    entrypoint: ./scripts/run.sh -d eth0 --target=26.0
 
   rust-node:
     image: simplestakingcom/tezedge:v0.7.2
@@ -19,26 +17,6 @@ services:
     network_mode: "service:firewall"
     volumes:
       - "storage:/tmp"
-
-  test_pow_reuse:
-    build:
-      context: .
-      dockerfile: packet-generator.dockerfile
-    depends_on:
-      - rust-node
-    volumes:
-      - "storage:/tmp"
-    entrypoint: sh -c "./scripts/test_pow_reuse.sh"
-
-  test_bad_pow:
-    build:
-      context: .
-      dockerfile: packet-generator.dockerfile
-    depends_on:
-      - rust-node
-    volumes:
-      - "storage:/tmp"
-    entrypoint: sh -c "./scripts/test_bad_pow.sh"
 
 volumes:
   storage:
