@@ -2,7 +2,10 @@ version: "3"
 
 services:
   firewall:
-    build: .
+    build:
+      context: .
+      args:
+        COMPLEXITY: 26.0
     privileged: true
     volumes:
       - "storage:/tmp"
@@ -17,7 +20,7 @@ services:
     volumes:
       - "storage:/tmp"
 
-  packet-generator:
+  test_pow_reuse:
     build:
       context: .
       dockerfile: packet-generator.dockerfile
@@ -25,7 +28,17 @@ services:
       - rust-node
     volumes:
       - "storage:/tmp"
-    #entrypoint: sh -c "./scripts/packet_generator.sh firewall 9732"
+    entrypoint: sh -c "./scripts/test_pow_reuse.sh"
+
+  test_bad_pow:
+    build:
+      context: .
+      dockerfile: packet-generator.dockerfile
+    depends_on:
+      - rust-node
+    volumes:
+      - "storage:/tmp"
+    entrypoint: sh -c "./scripts/test_bad_pow.sh"
 
 volumes:
   storage:

@@ -54,13 +54,13 @@ where
                         match &event.event {
                             EventInner::ReceivedPow(b) => match check_proof_of_work(b, target) {
                                 Ok(()) => (),
-                                Err(()) => block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork),
+                                Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork),
                             },
                             EventInner::NotEnoughBytesForPow => {
-                                block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork)
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork)
                             },
                             EventInner::BlockedAlreadyConnected { .. } => {
-                                block_ip(map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected)
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected)
                             }
                         }
                     });
@@ -71,9 +71,9 @@ where
     }
 }
 
-fn block_ip<'a>(map: HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason) {
+fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason) {
     // TODO: store reason somewhere in userspace
-    let _ = reason;
+    println!("block {}, reason: {:?}", ip, reason);
     match ip {
         IpAddr::V4(ip) => map.set(ip.octets(), 0),
         IpAddr::V6(_) => unimplemented!(),
@@ -117,8 +117,8 @@ async fn main() {
 
     with_map_ref(&loaded.module, "blacklist", |map| {
         for block in blacklist {
-            let ip = block.parse::<Ipv4Addr>().unwrap();
-            map.set(ip.octets(), 0);
+            let ip = block.parse::<IpAddr>().unwrap();
+            block_ip(&map, ip, BlockingReason::CommandLineArgument);
         }
     });
 
@@ -152,7 +152,7 @@ async fn main() {
                     match command.unwrap() {
                         Command::Block(ip) => {
                             with_map_ref(&module, "blacklist", |map| {
-                                block_ip(map, ip, BlockingReason::EventFromTezedge)
+                                block_ip(&map, ip, BlockingReason::EventFromTezedge)
                             })
                         },
                         Command::Unblock(ip) => {
