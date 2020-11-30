@@ -1,0 +1,46 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: build
+    image: simplestakingcom/tezedge-ci-builder:latest
+    pull: if-not-exists
+    environment:
+      RUST_BACKTRACE: 1
+    volumes:
+      - name: binaries
+        path: /tmp/binaries
+      - name: identities
+        path: /tmp/identities
+    commands:
+      - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y libarchive-tools bc libelf-dev flex bison
+      - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && ./llvm.sh 11; rm llvm.sh
+      - ./scripts/build.sh 5.8.18
+      - cargo install --path packet-generator --root .
+      - cp ./bin/* /tmp/binaries
+      - cp identity_*.json /tmp/identities
+
+  - name: tezedge
+    image: simplestakingcom/tezedge:v0.7.2
+    pull: if-not-exists
+    volumes:
+      - name: binaries
+        path: /tmp/binaries
+    commands:
+      - /tmp/binaries/firewall-5.8.18 $@ &
+      - sleep 1
+      - /tmp/binaries/fw node 9732
+      - sleep inf
+      - /home/appuser/tezedge/docker/full/tezedge.sh
+
+  - name: test_bad_pow.sh
+    image: simplestakingcom/tezedge-ci-builder:latest
+    pull: if-not-exists
+    volumes:
+      - name: binaries
+        path: /tmp/binaries
+      - name: identities
+        path: /tmp/identities
+    commands:
+      - /tmp/binaries/packet-generator --address=tezedge:9732 --identity=/tmp/identities/identity_bad.json

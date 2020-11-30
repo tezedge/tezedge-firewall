@@ -10,7 +10,7 @@ export KERNEL_VERSION=$1
 export KERNEL_SOURCE=$(pwd)/linux-$1
 cargo build -p firewall --bin firewall && cargo build -p firewall --bin fw
 rm -R linux-$1{,.tar.xz}
-mkdir -p target/bpf
-mv target/debug/firewall ./firewall-$1
-mv target/debug/fw ./fw
+mkdir -p bin
+mv target/debug/firewall ./bin/firewall-$1
+mv target/debug/fw ./bin/fw
 cargo clean

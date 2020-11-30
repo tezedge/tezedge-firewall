@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 if [ ! -f firewall-$(uname -r) ]; then
-    ./firewall-5.8.18 $@ &
+    ./bin/firewall-5.8.18 $@ &
 else
-    ./firewall-$(uname -r) $@ &
+    ./bin/firewall-$(uname -r) $@ &
 fi
 sleep 1
-./fw node 9732
+./bin/fw node 9732
 sleep inf
