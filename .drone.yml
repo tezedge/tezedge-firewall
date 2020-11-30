@@ -37,10 +37,9 @@ steps:
   - name: wait_for_tezedge
     image: ubuntu:20.04
     pull: if-not-exists
-    detach: true
     commands:
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y netcat
-      - while ! nc -z localhost 9732; do sleep 0.5; done
+      - while ! nc -z tezedge 9732; do sleep 0.5; done
 
   - name: test_bad_pow.sh
     image: simplestakingcom/tezedge-ci-builder:latest
