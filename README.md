@@ -41,16 +41,11 @@ For example `sudo ~/.cargo/bin/firewall --device enp4s0 -b 51.15.220.7 -b 95.217
 
 ## Docker
 
-Build docker image.
+Run in docker, should be privileged.
+```
+docker run --privileged -d simplestakingcom/tezedge-firewall:0.1
+```
 
-```
-docker build -t tezedge-firewall .
-```
-
-Run docker container, should be privileged.
-```
-docker run --privileged -d tezedge-firewall
-```
 The file `/tmp/tezedge_firewall.sock` in the docker container is a unix domain socket.
 This socket is communication channel with the TezEdge node.
 The TezEdge node should have access to this file. 
