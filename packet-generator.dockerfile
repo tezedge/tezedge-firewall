@@ -20,6 +20,6 @@ COPY . /root/bpf-firewall
 WORKDIR /root/bpf-firewall
 
 # packet-generator
-RUN apt install -y pkg-config netcat
+RUN apt install -y pkg-config curl
 ENV SODIUM_USE_PKG_CONFIG=1
 RUN cargo build -p packet-generator
