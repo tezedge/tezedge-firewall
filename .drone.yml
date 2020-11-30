@@ -29,7 +29,8 @@ steps:
       - name: binaries
         path: /tmp/binaries
     commands:
-      - /tmp/binaries/firewall-5.8.18 $@ &
+      # intensionally low complexity 18.0
+      - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
       - sleep 1
       - /tmp/binaries/fw node 9732
       - /home/appuser/tezedge/docker/full/tezedge.sh
@@ -39,7 +40,7 @@ steps:
     pull: if-not-exists
     commands:
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y netcat
-      - while ! nc -z tezedge 9732; do sleep 0.5; done
+      - while ! nc -z tezedge 9732; do sleep 5; done
 
   - name: test_bad_pow.sh
     image: simplestakingcom/tezedge-ci-builder:latest
