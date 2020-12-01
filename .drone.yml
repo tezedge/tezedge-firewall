@@ -20,6 +20,7 @@ steps:
       - cargo install --path packet-generator --root .
       - cp ./bin/* /tmp/binaries
       - cp ./scripts/wait_until.sh /tmp/binaries
+      - cp ./scripts/ci_test.sh /tmp/binaries
       - cp identity_*.json /tmp/identities
 
   - name: tezedge
@@ -33,7 +34,7 @@ steps:
         path: /tmp/binaries
     commands:
       # intensionally low complexity 18.0
-      - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
+      - /tmp/binaries/firewall-5.8.18 -d docker0 --target=18.0 &
       - sleep 1
       - /tmp/binaries/fw node 9732
       - git clone https://github.com/simplestaking/tezedge
@@ -60,7 +61,7 @@ steps:
       - name: identities
         path: /tmp/identities
     commands:
-      - /tmp/binaries/packet-generator --address=tezedge:9732 --identity=/tmp/identities/identity_bad.json
+      - $IDENTITIES=/tmp/identities /tmp/binaries/ci_test.sh tezedge:9732
 
 volumes:
   - name: binaries

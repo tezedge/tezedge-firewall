@@ -16,7 +16,6 @@ services:
     volumes:
       - "storage:/tmp"
 
-
 volumes:
   storage:
     external: false
