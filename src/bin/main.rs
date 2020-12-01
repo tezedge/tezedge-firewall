@@ -161,6 +161,7 @@ async fn main() {
                             })
                         },
                         Command::FilterLocalPort(port) => {
+                            println!("start filter incoming messages on {}", port);
                             with_map_ref::<_, u16, u32>(&module, "node", |map| {
                                 map.set(port, 0)
                             })

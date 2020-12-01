@@ -32,8 +32,6 @@ steps:
     volumes:
       - name: binaries
         path: /tmp/binaries
-      - name: socket
-        path: /tmp/tezedge_firewall.sock
     commands:
       # intensionally low complexity 18.0
       - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
@@ -54,7 +52,7 @@ steps:
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y curl
       - /tmp/binaries/wait_until.sh tezedge:18732
 
-  - name: test_bad_pow.sh
+  - name: test_bad_pow
     image: simplestakingcom/tezedge-ci-builder:latest
     pull: if-not-exists
     volumes:
@@ -69,6 +67,4 @@ volumes:
   - name: binaries
     temp: {}
   - name: identities
-    temp: {}
-  - name: socket
     temp: {}
