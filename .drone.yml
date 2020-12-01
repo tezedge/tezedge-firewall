@@ -34,7 +34,7 @@ steps:
         path: /tmp/binaries
     commands:
       # intensionally low complexity 18.0
-      - /tmp/binaries/firewall-5.8.18 -d docker0 --target=18.0 &
+      - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
       - sleep 1
       - /tmp/binaries/fw node 9732
       - git clone https://github.com/simplestaking/tezedge
@@ -61,7 +61,7 @@ steps:
       - name: identities
         path: /tmp/identities
     commands:
-      - $IDENTITIES=/tmp/identities /tmp/binaries/ci_test.sh tezedge:9732
+      - IDENTITIES=/tmp/identities BINARIES=/tmp/binaries /tmp/binaries/ci_test.sh tezedge:9732
 
 volumes:
   - name: binaries
