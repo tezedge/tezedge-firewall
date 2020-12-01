@@ -32,6 +32,8 @@ steps:
     volumes:
       - name: binaries
         path: /tmp/binaries
+      - name: socket
+        path: /tmp/tezedge_firewall.sock
     commands:
       # intensionally low complexity 18.0
       - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
@@ -67,4 +69,6 @@ volumes:
   - name: binaries
     temp: {}
   - name: identities
+    temp: {}
+  - name: socket
     temp: {}
