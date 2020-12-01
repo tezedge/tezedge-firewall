@@ -1,5 +1,30 @@
 # Tezos Firewall
 
+## Docker compose
+
+### Get the source code
+
+```
+git clone https://github.com/simplestaking/tezedge-firewall.git
+cd tezedge-firewall
+```
+
+### Run example
+
+Tested with: Docker engine version 19.03.12 and Docker compose version 1.26.2.
+
+For the first run it requires internet connection and some time to download docker images.
+
+```
+docker-compose -f docker-compose.firewall.ocaml.yml up --build
+```
+
+Run the example with multiple attackers, firewall will stop them all.
+
+```
+docker-compose -f docker-compose.firewall.ocaml.yml up --build --scale test_proof_of_work=10
+```
+
 ## Install
 
 ### Dependencies
