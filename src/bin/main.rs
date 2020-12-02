@@ -175,7 +175,7 @@ async fn main() {
                     let command = match command {
                         Ok(c) => c,
                         Err(e) => {
-                            slog::error!(l, "failed to receive or parse command: \"{}\"", e);
+                            slog::error!(l, "failed to receive or parse command: \"{:?}\"", e);
                             continue;
                         },
                     };
