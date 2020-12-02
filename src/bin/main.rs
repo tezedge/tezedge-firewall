@@ -90,7 +90,7 @@ where
 
 fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, l: &slog::Logger) {
     // TODO: store reason somewhere in userspace
-    slog::warn!(l, "block {}, reason: {:?}", ip, reason);
+    slog::info!(l, "block {}, reason: {:?}", ip, reason);
     match ip {
         IpAddr::V4(ip) => map.set(ip.octets(), 0),
         IpAddr::V6(_) => unimplemented!(),
@@ -171,9 +171,16 @@ async fn main() {
                 let mut command_stream = Framed::new(stream, CommandDecoder);
                 while let Some(command) = command_stream.next().await {
                     let module = module.lock().await;
-                    slog::info!(l, "received command: \"{:?}\"", command);
                     // if command is bad, the thread will panic, and sender should reconnect
-                    match command.unwrap() {
+                    let command = match command {
+                        Ok(c) => c,
+                        Err(e) => {
+                            slog::error!(l, "failed to receive or parse command: \"{}\"", e);
+                            continue;
+                        },
+                    };
+                    slog::info!(l, "received command: \"{:?}\"", command);
+                    match command {
                         Command::Block(ip) => {
                             with_map_ref(&module, "blacklist", |map| {
                                 block_ip(&map, ip, BlockingReason::EventFromTezedge, &l)
