@@ -16,7 +16,8 @@ steps:
     commands:
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y libarchive-tools bc libelf-dev flex bison
       - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && ./llvm.sh 11; rm llvm.sh
-      - SV=$(uname -r) ./scripts/build.sh ${SV%-*-*}
+      - export KERNEL_VERSION=$(uname -r)
+      - ./scripts/build.sh ${KERNEL_VERSION%-*-*}
       - cargo install --path packet-generator --root .
       - cp ./bin/* /tmp/binaries
       - cp ./scripts/wait_until.sh /tmp/binaries
