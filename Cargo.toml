@@ -34,7 +34,6 @@ xdp-module = { path = "xdp-module" }
 crypto = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
 tezos_encoding = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
 
-[dev-dependencies]
 hex = "0.4"
 
 [build-dependencies]

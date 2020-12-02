@@ -76,7 +76,7 @@ where
                                 block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l)
                             },
                             EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
-                                slog::info!(l, "already connected: {}, try connect: {}", already_connected, try_connect);
+                                slog::info!(l, "already connected: {:?}, try connect: {:?}", already_connected, try_connect);
                                 block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, l)
                             }
                         }
