@@ -65,7 +65,7 @@ where
                         let ip = event.pair.remote.ipv4;
                         match &event.event {
                             EventInner::ReceivedPow(b) => {
-                                slog::info!(l, "received proof of work: {}", hex::encode(b));
+                                slog::info!(l, "received proof of work: {}", hex::encode(b.as_ref()));
                                 match check_proof_of_work(b, target) {
                                     Ok(()) => slog::info!(l, "proof of work is valid, complexity: {}", target),
                                     Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l),
