@@ -1,7 +1,6 @@
 //#![forbid(unsafe_code)]
 
-use std::{env, fs, io, ptr, sync::Arc, net::{SocketAddr, Ipv4Addr, IpAddr}};
-use structopt::StructOpt;
+use std::{env, fs, io, net::{IpAddr, Ipv4Addr, SocketAddr}, os::unix::fs::PermissionsExt, path::Path, ptr, sync::Arc};
 use redbpf::{
     load::Loader,
     xdp::Flags,
@@ -11,6 +10,7 @@ use redbpf::{
 use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex};
 use tokio_util::codec::Framed;
 use slog::Drain;
+use structopt::StructOpt;
 
 use crypto::proof_of_work::check_proof_of_work;
 use xdp_module::{Event, EventInner, BlockingReason, Endpoint};
@@ -65,24 +65,24 @@ where
                         let ip = event.pair.remote.ipv4;
                         match &event.event {
                             EventInner::ReceivedPow(b) => {
-                                slog::info!(l, "received proof of work: {}", hex::encode(b.as_ref()));
+                                slog::info!(l, "Received proof of work: {}", hex::encode(b.as_ref()));
                                 match check_proof_of_work(b, target) {
-                                    Ok(()) => slog::info!(l, "proof of work is valid, complexity: {}", target),
+                                    Ok(()) => slog::info!(l, "Proof of work is valid, complexity: {}", target),
                                     Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l),
                                 }
                             },
                             EventInner::NotEnoughBytesForPow => {
-                                slog::info!(l, "received proof of work too short");
+                                slog::info!(l, "Received proof of work too short");
                                 block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l)
                             },
                             EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
-                                slog::info!(l, "already connected: {:?}, try connect: {:?}", already_connected, try_connect);
+                                slog::info!(l, "Already connected: {:?}, try connect: {:?}", already_connected, try_connect);
                                 block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, l)
                             }
                         }
                     });
                 },
-                unknown => slog::error!(l, "warning: ignored unknown event: {}", unknown),
+                unknown => slog::warn!(l, "Warning: ignored unknown event: {}", unknown),
             }
         }
     }
@@ -90,7 +90,7 @@ where
 
 fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, l: &slog::Logger) {
     // TODO: store reason somewhere in userspace
-    slog::info!(l, "block {}, reason: {:?}", ip, reason);
+    slog::info!(l, "Block {}, reason: {:?}", ip, reason);
     match ip {
         IpAddr::V4(ip) => map.set(ip.octets(), 0),
         IpAddr::V6(_) => unimplemented!(),
@@ -118,6 +118,35 @@ where
     }
 }
 
+fn remove_socket_path(socket_path: &Path) -> Result<(), io::Error> {
+    if socket_path.exists() {
+        fs::remove_file(socket_path)?;
+    }
+    Ok(())
+}
+
+/// Need to set "anyone write/read permissions", because we run firewall as sudo, but node should not run with sudo
+fn ensure_socket_permissions(socket_path: &Path, log: &slog::Logger) -> Result<(), io::Error> {
+    let metadata = fs::metadata(socket_path)?;
+
+    // if not having r/w for anyone, than try to chmod it
+    if (metadata.permissions().mode() & 0o666) != 0o666 {
+        const REQUIRED_PERMS: i32 = 0o766;
+        slog::info!(log, "Changing permission for socket";
+                   "socket_path" => socket_path.as_os_str().to_str().unwrap(),
+                   "perms" => format!("{:o} -> {:o}", metadata.permissions().mode() & 0o777, REQUIRED_PERMS));
+        let file = std::ffi::CString::new(
+            socket_path.as_os_str().to_str().unwrap()
+        ).expect(&format!("Failed to convert socket_path: {} to CString", socket_path.as_os_str().to_str().unwrap()));
+
+        unsafe {
+            let _ = libc::chmod(file.as_ptr(), REQUIRED_PERMS as u32);
+        }
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
     let Opts { device, blacklist, target, socket } = Opts::from_args();
@@ -128,11 +157,11 @@ async fn main() {
         env!("OUT_DIR"),
         "/target/bpf/programs/xdp_module/xdp_module.elf"
     ));
-    let mut loaded = Loader::load(code).expect("error loading BPF program");
+    let mut loaded = Loader::load(code).expect("Error loading BPF program");
     for kp in loaded.xdps_mut() {
         kp.attach_xdp(device.as_str(), Flags::Unset)
-            .expect(&format!("error attaching xdp program {}", kp.name()));
-        slog::debug!(l, "loaded xdp program: \"{}\"", kp.name());
+            .expect(&format!("Error attaching xdp program {}", kp.name()));
+        slog::debug!(l, "Loaded xdp program: \"{}\"", kp.name());
     }
 
     with_map_ref(&loaded.module, "blacklist", |map| {
@@ -151,17 +180,22 @@ async fn main() {
     }
 
     tokio::spawn(async move {
-        fs::remove_file(socket.clone())
-            .or_else(|e| {
-                if let io::ErrorKind::NotFound = e.kind() {
-                    Ok(())
-                } else {
-                    Err(e)
-                }
-            })
-            .unwrap();
-        let mut listener = UnixListener::bind(socket.clone()).unwrap();
-        slog::info!(l, "listening commands on unix domain socket: \"{}\"", socket);
+        // remove existing file
+        let socket_path = Path::new(&socket);
+        if let Err(e) = remove_socket_path(socket_path) {
+            slog::error!(l, "Failed to remove old file for unix domain socket"; "reason" => format!("{}", e));
+            panic!("Failed to remove old file for unix domain socket, reason: {}", e)
+        }
+
+        // run socket listener
+        let mut listener = UnixListener::bind(socket_path).unwrap();
+
+        if let Err(e) = ensure_socket_permissions(&socket_path, &l) {
+            slog::error!(l, "Failed to set file permissions for unix domain socket"; "reason" => format!("{}", e), "socket_path" => socket_path.as_os_str().to_str().unwrap());
+            panic!("Failed to set file permissions for unix domain socket: \"{}\", reason: {}", socket_path.as_os_str().to_str().unwrap(), e)
+        }
+
+        slog::info!(l, "Listening commands on unix domain socket"; "socket_path" => socket_path.as_os_str().to_str().unwrap());
         loop {
             let (stream, _) = listener.accept().await.unwrap();
 
@@ -175,11 +209,11 @@ async fn main() {
                     let command = match command {
                         Ok(c) => c,
                         Err(e) => {
-                            slog::error!(l, "failed to receive or parse command: \"{:?}\"", e);
+                            slog::error!(l, "Failed to receive or parse command: \"{:?}\"", e);
                             continue;
                         },
                     };
-                    slog::info!(l, "received command: \"{:?}\"", command);
+                    slog::info!(l, "Received command: \"{:?}\"", command);
                     match command {
                         Command::Block(ip) => {
                             with_map_ref(&module, "blacklist", |map| {
@@ -210,7 +244,7 @@ async fn main() {
                                 map.delete(pk)
                             })
                         },
-                        _ => slog::error!(l, "not implemented"),
+                        _ => slog::error!(l, "Not implemented yet"),
                     }
                 }
             });
