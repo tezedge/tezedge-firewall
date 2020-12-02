@@ -1,18 +1,19 @@
 //#![forbid(unsafe_code)]
 
+use std::{env, fs, io, ptr, sync::Arc, net::{SocketAddr, Ipv4Addr, IpAddr}};
 use structopt::StructOpt;
-use crypto::proof_of_work::check_proof_of_work;
-use xdp_module::{Event, EventInner, BlockingReason, Endpoint};
 use redbpf::{
     load::Loader,
     xdp::Flags,
     HashMap,
     Module,
 };
-use std::{env, fs, io, ptr, sync::Arc, net::{SocketAddr, Ipv4Addr, IpAddr}};
 use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex};
 use tokio_util::codec::Framed;
+use slog::Drain;
 
+use crypto::proof_of_work::check_proof_of_work;
+use xdp_module::{Event, EventInner, BlockingReason, Endpoint};
 use tezedge_firewall::{CommandDecoder, Command};
 
 #[derive(StructOpt)]
@@ -36,7 +37,19 @@ struct Opts {
     socket: String,
 }
 
-async fn event_handler<E>(events: E, module: Arc<Mutex<Module>>, target: f64)
+fn logger() -> slog::Logger {
+    let drain = slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
+        .build()
+        .fuse();
+    let drain = slog_async::Async::new(drain)
+        .chan_size(0x8000)
+        .overflow_strategy(slog_async::OverflowStrategy::Block)
+        .build()
+        .fuse();
+    slog::Logger::root(drain, slog::o!())
+}
+
+async fn event_handler<E>(events: E, module: Arc<Mutex<Module>>, target: f64, l: &slog::Logger)
 where
     E: Unpin + Send + Stream<Item = (String, Vec<Box<[u8]>>)> + 'static,
 {
@@ -46,34 +59,38 @@ where
             match name.as_str() {
                 "events" => {
                     let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
-                    println!("{:x?}", &event);
 
                     let module = module.lock().await;
                     with_map_ref(&module, "blacklist", |map| {
                         let ip = event.pair.remote.ipv4;
                         match &event.event {
-                            EventInner::ReceivedPow(b) => match check_proof_of_work(b, target) {
-                                Ok(()) => (),
-                                Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork),
+                            EventInner::ReceivedPow(b) => {
+                                slog::info!(l, "received proof of work: {}", hex::encode(b));
+                                match check_proof_of_work(b, target) {
+                                    Ok(()) => slog::info!(l, "proof of work is valid, complexity: {}", target),
+                                    Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l),
+                                }
                             },
                             EventInner::NotEnoughBytesForPow => {
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork)
+                                slog::info!(l, "received proof of work too short");
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l)
                             },
-                            EventInner::BlockedAlreadyConnected { .. } => {
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected)
+                            EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
+                                slog::info!(l, "already connected: {}, try connect: {}", already_connected, try_connect);
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, l)
                             }
                         }
                     });
                 },
-                unknown => eprintln!("warning: ignored unknown event: {}", unknown),
+                unknown => slog::error!(l, "warning: ignored unknown event: {}", unknown),
             }
         }
     }
 }
 
-fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason) {
+fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, l: &slog::Logger) {
     // TODO: store reason somewhere in userspace
-    println!("block {}, reason: {:?}", ip, reason);
+    slog::warn!(l, "block {}, reason: {:?}", ip, reason);
     match ip {
         IpAddr::V4(ip) => map.set(ip.octets(), 0),
         IpAddr::V6(_) => unimplemented!(),
@@ -105,6 +122,8 @@ where
 async fn main() {
     let Opts { device, blacklist, target, socket } = Opts::from_args();
 
+    let l = logger();
+
     let code = include_bytes!(concat!(
         env!("OUT_DIR"),
         "/target/bpf/programs/xdp_module/xdp_module.elf"
@@ -113,12 +132,13 @@ async fn main() {
     for kp in loaded.xdps_mut() {
         kp.attach_xdp(device.as_str(), Flags::Unset)
             .expect(&format!("error attaching xdp program {}", kp.name()));
+        slog::debug!(l, "loaded xdp program: \"{}\"", kp.name());
     }
 
     with_map_ref(&loaded.module, "blacklist", |map| {
         for block in blacklist {
             let ip = block.parse::<IpAddr>().unwrap();
-            block_ip(&map, ip, BlockingReason::CommandLineArgument);
+            block_ip(&map, ip, BlockingReason::CommandLineArgument, &l);
         }
     });
 
@@ -126,7 +146,8 @@ async fn main() {
     let events = loaded.events;
     {
         let module = module.clone();
-        tokio::spawn(async move { event_handler(events, module, target).await });
+        let l = l.clone();
+        tokio::spawn(async move { event_handler(events, module, target, &l).await });
     }
 
     tokio::spawn(async move {
@@ -139,20 +160,23 @@ async fn main() {
                 }
             })
             .unwrap();
-        let mut listener = UnixListener::bind(socket).unwrap();
+        let mut listener = UnixListener::bind(socket.clone()).unwrap();
+        slog::info!(l, "listening commands on unix domain socket: \"{}\"", socket);
         loop {
             let (stream, _) = listener.accept().await.unwrap();
 
             let module = module.clone();
+            let l = l.clone();
             tokio::spawn(async move {
                 let mut command_stream = Framed::new(stream, CommandDecoder);
                 while let Some(command) = command_stream.next().await {
                     let module = module.lock().await;
+                    slog::info!(l, "received command: \"{:?}\"", command);
                     // if command is bad, the thread will panic, and sender should reconnect
                     match command.unwrap() {
                         Command::Block(ip) => {
                             with_map_ref(&module, "blacklist", |map| {
-                                block_ip(&map, ip, BlockingReason::EventFromTezedge)
+                                block_ip(&map, ip, BlockingReason::EventFromTezedge, &l)
                             })
                         },
                         Command::Unblock(ip) => {
@@ -161,7 +185,6 @@ async fn main() {
                             })
                         },
                         Command::FilterLocalPort(port) => {
-                            println!("start filter incoming messages on {}", port);
                             with_map_ref::<_, u16, u32>(&module, "node", |map| {
                                 map.set(port, 0)
                             })
@@ -180,7 +203,7 @@ async fn main() {
                                 map.delete(pk)
                             })
                         },
-                        _ => unimplemented!(),
+                        _ => slog::error!(l, "not implemented"),
                     }
                 }
             });

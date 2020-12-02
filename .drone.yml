@@ -16,7 +16,7 @@ steps:
     commands:
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y libarchive-tools bc libelf-dev flex bison
       - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && ./llvm.sh 11; rm llvm.sh
-      - ./scripts/build.sh 5.8.18
+      - SV=$(uname -r) ./scripts/build.sh ${SV%-*-*}
       - cargo install --path packet-generator --root .
       - cp ./bin/* /tmp/binaries
       - cp ./scripts/wait_until.sh /tmp/binaries
@@ -34,7 +34,7 @@ steps:
         path: /tmp/binaries
     commands:
       # intensionally low complexity 18.0
-      - /tmp/binaries/firewall-5.8.18 -d eth0 --target=18.0 &
+      - /tmp/binaries/firewall-* -d eth0 --target=18.0 &
       - sleep 1
       - /tmp/binaries/fw node 9732
       - git clone https://github.com/simplestaking/tezedge

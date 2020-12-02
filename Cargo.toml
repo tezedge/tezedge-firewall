@@ -25,6 +25,9 @@ bytes = { version = "0.5" }
 redbpf = { version = "1.2", features = ["load"] }
 serde = { version = "1.0", features = ["derive"] }
 lazy_static = { version = "1.4" }
+slog = "2.7"
+slog-async = "2.5"
+slog-term = "2.6"
 
 xdp-module = { path = "xdp-module" }
 
