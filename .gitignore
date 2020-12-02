@@ -5,3 +5,9 @@ Cargo.lock
 /*.elf
 /prepare_dependencies.sh
 /redbpf.patch
+
+/.vscode
+
+# Idea project files
+.idea
+*.iml
