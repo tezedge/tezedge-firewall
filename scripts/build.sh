@@ -2,9 +2,13 @@
 
 set -e
 
-export K=$(awk -F '-' '{print $1}' <<< "$1")
+export K=${1%-*-*}
+if [ ${K#*.*.} == "0" ]
+then export K=${K%.*}; export M=${K%.*}
+else export M=${K%.*.*}
+fi
 
-wget -cq https://cdn.kernel.org/pub/linux/kernel/v${K%.*.*}.x/linux-$K.tar.xz
+wget -cq https://cdn.kernel.org/pub/linux/kernel/v$M.x/linux-$K.tar.xz
 tar -xf linux-$K.tar.xz
 pushd linux-$K
 make defconfig
