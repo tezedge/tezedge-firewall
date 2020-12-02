@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 wget -cq https://cdn.kernel.org/pub/linux/kernel/v${1%.*.*}.x/linux-$1.tar.xz
 tar -xf linux-$1.tar.xz
 pushd linux-$1
