@@ -49,7 +49,7 @@ fn logger() -> slog::Logger {
     slog::Logger::root(drain, slog::o!())
 }
 
-async fn event_handler<E>(events: E, module: Arc<Mutex<Module>>, target: f64, l: &slog::Logger)
+async fn event_handler<E>(events: E, module: Arc<Mutex<Module>>, target: f64, log: &slog::Logger)
 where
     E: Unpin + Send + Stream<Item = (String, Vec<Box<[u8]>>)> + 'static,
 {
@@ -65,32 +65,32 @@ where
                         let ip = event.pair.remote.ipv4;
                         match &event.event {
                             EventInner::ReceivedPow(b) => {
-                                slog::info!(l, "Received proof of work: {}", hex::encode(b.as_ref()));
+                                slog::info!(log, "Received proof of work: {}", hex::encode(b.as_ref()));
                                 match check_proof_of_work(b, target) {
-                                    Ok(()) => slog::info!(l, "Proof of work is valid, complexity: {}", target),
-                                    Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l),
+                                    Ok(()) => slog::info!(log, "Proof of work is valid, complexity: {}", target),
+                                    Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, log),
                                 }
                             },
                             EventInner::NotEnoughBytesForPow => {
-                                slog::info!(l, "Received proof of work too short");
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, l)
+                                slog::info!(log, "Received proof of work too short");
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, log)
                             },
                             EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
-                                slog::info!(l, "Already connected: {:?}, try connect: {:?}", already_connected, try_connect);
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, l)
+                                slog::info!(log, "Already connected: {:?}, try connect: {:?}", already_connected, try_connect);
+                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, log)
                             }
                         }
                     });
                 },
-                unknown => slog::warn!(l, "Warning: ignored unknown event: {}", unknown),
+                unknown => slog::warn!(log, "Warning: ignored unknown event: {}", unknown),
             }
         }
     }
 }
 
-fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, l: &slog::Logger) {
+fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, log: &slog::Logger) {
     // TODO: store reason somewhere in userspace
-    slog::info!(l, "Block {}, reason: {:?}", ip, reason);
+    slog::info!(log, "Block {}, reason: {:?}", ip, reason);
     match ip {
         IpAddr::V4(ip) => map.set(ip.octets(), 0),
         IpAddr::V6(_) => unimplemented!(),
@@ -151,7 +151,7 @@ fn ensure_socket_permissions(socket_path: &Path, log: &slog::Logger) -> Result<(
 async fn main() {
     let Opts { device, blacklist, target, socket } = Opts::from_args();
 
-    let l = logger();
+    let log = logger();
 
     let code = include_bytes!(concat!(
         env!("OUT_DIR"),
@@ -161,13 +161,13 @@ async fn main() {
     for kp in loaded.xdps_mut() {
         kp.attach_xdp(device.as_str(), Flags::Unset)
             .expect(&format!("Error attaching xdp program {}", kp.name()));
-        slog::debug!(l, "Loaded xdp program: \"{}\"", kp.name());
+        slog::debug!(log, "Loaded xdp program: \"{}\"", kp.name());
     }
 
     with_map_ref(&loaded.module, "blacklist", |map| {
         for block in blacklist {
             let ip = block.parse::<IpAddr>().unwrap();
-            block_ip(&map, ip, BlockingReason::CommandLineArgument, &l);
+            block_ip(&map, ip, BlockingReason::CommandLineArgument, &log);
         }
     });
 
@@ -175,49 +175,49 @@ async fn main() {
     let events = loaded.events;
     {
         let module = module.clone();
-        let l = l.clone();
-        tokio::spawn(async move { event_handler(events, module, target, &l).await });
+        let log = log.clone();
+        tokio::spawn(async move { event_handler(events, module, target, &log).await });
     }
 
     tokio::spawn(async move {
         // remove existing file
         let socket_path = Path::new(&socket);
         if let Err(e) = remove_socket_path(socket_path) {
-            slog::error!(l, "Failed to remove old file for unix domain socket"; "reason" => format!("{}", e));
+            slog::error!(log, "Failed to remove old file for unix domain socket"; "reason" => format!("{}", e));
             panic!("Failed to remove old file for unix domain socket, reason: {}", e)
         }
 
         // run socket listener
         let mut listener = UnixListener::bind(socket_path).unwrap();
 
-        if let Err(e) = ensure_socket_permissions(&socket_path, &l) {
-            slog::error!(l, "Failed to set file permissions for unix domain socket"; "reason" => format!("{}", e), "socket_path" => socket_path.as_os_str().to_str().unwrap());
+        if let Err(e) = ensure_socket_permissions(&socket_path, &log) {
+            slog::error!(log, "Failed to set file permissions for unix domain socket"; "reason" => format!("{}", e), "socket_path" => socket_path.as_os_str().to_str().unwrap());
             panic!("Failed to set file permissions for unix domain socket: \"{}\", reason: {}", socket_path.as_os_str().to_str().unwrap(), e)
         }
 
-        slog::info!(l, "Listening commands on unix domain socket"; "socket_path" => socket_path.as_os_str().to_str().unwrap());
+        slog::info!(log, "Listening commands on unix domain socket"; "socket_path" => socket_path.as_os_str().to_str().unwrap());
         loop {
             let (stream, _) = listener.accept().await.unwrap();
 
             let module = module.clone();
-            let l = l.clone();
+            let log = log.clone();
             tokio::spawn(async move {
                 let mut command_stream = Framed::new(stream, CommandDecoder);
                 while let Some(command) = command_stream.next().await {
                     let module = module.lock().await;
-                    // if command is bad, the thread will panic, and sender should reconnect
+                    // if command is bad, ignore it and report error
                     let command = match command {
                         Ok(c) => c,
                         Err(e) => {
-                            slog::error!(l, "Failed to receive or parse command: \"{:?}\"", e);
+                            slog::error!(log, "Failed to receive or parse command: \"{:?}\"", e);
                             continue;
                         },
                     };
-                    slog::info!(l, "Received command: \"{:?}\"", command);
+                    slog::info!(log, "Received command: \"{:?}\"", command);
                     match command {
                         Command::Block(ip) => {
                             with_map_ref(&module, "blacklist", |map| {
-                                block_ip(&map, ip, BlockingReason::EventFromTezedge, &l)
+                                block_ip(&map, ip, BlockingReason::EventFromTezedge, &log)
                             })
                         },
                         Command::Unblock(ip) => {
@@ -244,7 +244,7 @@ async fn main() {
                                 map.delete(pk)
                             })
                         },
-                        _ => slog::error!(l, "Not implemented yet"),
+                        _ => slog::error!(log, "Not implemented yet"),
                     }
                 }
             });
