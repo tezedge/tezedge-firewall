@@ -16,9 +16,10 @@ make modules_prepare
 popd
 export KERNEL_VERSION=$K
 export KERNEL_SOURCE=$(pwd)/linux-$K
-cargo build -p tezedge-firewall && cargo build -p tezedge-firewall --bin fw
+cargo build -p tezedge-firewall --release && cargo build -p tezedge-firewall --bin fw --bin packet-generator --release
 rm -R linux-$K{,.tar.xz}
 mkdir -p bin
-mv target/debug/tezedge-firewall ./bin/firewall-$1
-mv target/debug/fw ./bin/fw
+mv target/release/tezedge-firewall ./bin/firewall-$1
+mv target/release/fw ./bin/fw
+mv target/release/packet-generator ./bin/packet-generator
 cargo clean

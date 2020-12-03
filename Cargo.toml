@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "packet-generator", "tezedge-firewall"]
+members = [".", "tezedge-firewall"]
 
 [package]
 name = "tezedge-firewall-command"
@@ -13,6 +13,9 @@ tokio-util = { version = "0.3", features = ["codec"] }
 bytes = { version = "0.5" }
 serde = { version = "1.0", features = ["derive"] }
 lazy_static = { version = "1.4" }
-hex = "0.4"
+hex = { version = "0.4" }
 
-tezos_encoding = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
+tezos_encoding = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
+
+[profile.release]
+lto = true

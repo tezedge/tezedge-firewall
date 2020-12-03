@@ -14,7 +14,7 @@ required-features = ["probes"]
 #redbpf-probes = { path = "../../redbpf/redbpf-probes", default-features = false }
 redbpf-macros = { version = "1.2", default-features = false }
 redbpf-probes = { version = "1.2", default-features = false }
-bitflags = "1.2"
+bitflags = { version = "1.2" }
 
 [build-dependencies]
 #cargo-bpf = { path = "../../redbpf/cargo-bpf", default-features = false, features = ["bindings"] }

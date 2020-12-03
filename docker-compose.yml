@@ -2,7 +2,7 @@ version: "3"
 
 services:
   firewall:
-    image: simplestakingcom/tezedge-firewall:v0.1
+    image: simplestakingcom/tezedge-firewall:v0.1.1
     privileged: true
     volumes:
       - "storage:/tmp"

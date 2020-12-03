@@ -2,7 +2,7 @@ version: "3"
 
 services:
   firewall:
-    image: simplestakingcom/tezedge-firewall:v0.1
+    image: simplestakingcom/tezedge-firewall:v0.1.1
     privileged: true
     entrypoint: ./scripts/run.sh -d eth0 --target=26.0
 
@@ -15,7 +15,7 @@ services:
     network_mode: "service:firewall"
 
   test_proof_of_work:
-    image: simplestakingcom/tezedge-firewall-tests:v0.1
+    image: tezedge-firewall-test
     depends_on:
       - node
     entrypoint: sh -c "./scripts/wait_until.sh firewall:18732 && ./scripts/test_bad_pow.sh"
