@@ -1,41 +1,18 @@
 [workspace]
-members = [".", "xdp-module", "packet-generator"]
+members = [".", "packet-generator", "tezedge-firewall"]
 
 [package]
-name = "tezedge-firewall"
+name = "tezedge-firewall-command"
 version = "0.1.0"
 authors = ["Vladislav Melnik <vladislav.melnik@simplestaking.com>"]
 edition = "2018"
 
-[[bin]]
-name = "firewall"
-path = "src/bin/main.rs"
-
-[[bin]]
-name = "fw"
-path = "src/bin/client.rs"
-
 [dependencies]
-structopt = "0.3"
-libc = "0.2"
 tokio = { version = "0.2", features = ["signal", "time", "rt-core", "macros", "net", "stream", "sync", "io-util"] }
 tokio-util = { version = "0.3", features = ["codec"] }
 bytes = { version = "0.5" }
-#redbpf = { path = "redbpf/redbpf", features = ["load"] }
-redbpf = { version = "1.2", features = ["load"] }
 serde = { version = "1.0", features = ["derive"] }
 lazy_static = { version = "1.4" }
-slog = "2.7"
-slog-async = "2.5"
-slog-term = "2.6"
-
-xdp-module = { path = "xdp-module" }
-
-crypto = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
-tezos_encoding = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }
-
 hex = "0.4"
 
-[build-dependencies]
-#cargo-bpf = { path = "redbpf/cargo-bpf", default-features = false, features = ["build"] }
-cargo-bpf = { version = "1.2", default-features = false, features = ["build"] }
+tezos_encoding = { tag = "v0.6.0", git = "https://github.com/simplestaking/tezedge" }

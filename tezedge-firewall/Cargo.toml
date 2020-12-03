@@ -1,0 +1,30 @@
+[package]
+name = "tezedge-firewall"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vladislav.melnik@simplestaking.com>"]
+edition = "2018"
+
+[[bin]]
+name = "fw"
+path = "src/bin/client.rs"
+
+[dependencies]
+structopt = "0.3"
+libc = "0.2"
+tokio = { version = "0.2", features = ["signal", "time", "rt-core", "macros", "net", "stream", "sync", "io-util"] }
+tokio-util = { version = "0.3", features = ["codec"] }
+#redbpf = { path = "../redbpf/redbpf", features = ["load"] }
+redbpf = { version = "1.2", features = ["load"] }
+slog = "2.7"
+slog-async = "2.5"
+slog-term = "2.6"
+hex = "0.4"
+
+crypto = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
+
+tezedge-firewall-command = { path = ".." }
+xdp-module = { path = "xdp-module" }
+
+[build-dependencies]
+#cargo-bpf = { path = "../redbpf/cargo-bpf", default-features = false, features = ["build"] }
+cargo-bpf = { version = "1.2", default-features = false, features = ["build"] }

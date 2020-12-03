@@ -14,7 +14,7 @@ use structopt::StructOpt;
 
 use crypto::proof_of_work::check_proof_of_work;
 use xdp_module::{Event, EventInner, BlockingReason, Endpoint};
-use tezedge_firewall::{CommandDecoder, Command};
+use tezedge_firewall_command::{CommandDecoder, Command};
 
 #[derive(StructOpt)]
 struct Opts {

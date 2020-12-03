@@ -1,5 +1,4 @@
-use std::env;
-use std::path::{Path, PathBuf};
+use std::{env, path::{Path, PathBuf}};
 
 use cargo_bpf_lib as cargo_bpf;
 
