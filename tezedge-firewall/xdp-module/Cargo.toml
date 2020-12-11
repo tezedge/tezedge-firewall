@@ -9,16 +9,13 @@ name = "xdp_module"
 path = "src/bin/main.rs"
 required-features = ["probes"]
 
-[dependencies]
-#redbpf-macros = { path = "../../redbpf/redbpf-macros", default-features = false }
-#redbpf-probes = { path = "../../redbpf/redbpf-probes", default-features = false }
-redbpf-macros = { version = "1.2", default-features = false }
-redbpf-probes = { version = "1.2", default-features = false }
-bitflags = { version = "1.2" }
-
 [build-dependencies]
-#cargo-bpf = { path = "../../redbpf/cargo-bpf", default-features = false, features = ["bindings"] }
-cargo-bpf = { version = "1.2", default-features = false, features = ["bindings"] }
+cargo-bpf = { version = "1.3", default-features = false, features = ["bindings"] }
+
+[dependencies]
+redbpf-macros = { version = "1.3", default-features = false }
+redbpf-probes = { version = "1.3", default-features = false }
+bitflags = { version = "1.2" }
 
 [features]
 probes = []

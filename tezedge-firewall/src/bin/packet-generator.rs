@@ -1,4 +1,4 @@
-use std::{io, convert::TryFrom};
+use std::{io::{self, Read}, convert::TryFrom, fs::File};
 use structopt::StructOpt;
 use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}};
 use tezos_messages::p2p::{
@@ -10,7 +10,11 @@ use tezos_messages::p2p::{
     },
     binary_message::{BinaryMessage, BinaryChunk},
 };
-use tezos_conversation::{Identity, Decipher, NonceAddition};
+use crypto::{
+    crypto_box::{PrecomputedKey, precompute, encrypt, decrypt},
+    nonce::{NoncePair, generate_nonces},
+};
+use tezos_identity::Identity;
 
 #[derive(StructOpt)]
 struct Opts {
@@ -31,6 +35,11 @@ impl From<io::Error> for Error {
     }
 }
 
+pub struct Decipher {
+    key: PrecomputedKey,
+    nonce: NoncePair,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let Opts { address, identity } = StructOpt::from_args();
@@ -45,7 +54,12 @@ async fn main() -> Result<(), io::Error> {
 }
 
 async fn handshake(address: String, identity_path: String) -> Result<(), Error> {
-    let identity = Identity::from_path(identity_path.clone()).unwrap();
+    let mut identity_file = File::open(identity_path.clone())?;
+    let mut identity_json = String::new();
+    identity_file.read_to_string(&mut identity_json)?;
+    let identity = Identity::from_json(&identity_json)
+        .map_err(|e| Error::Other(e.into()))?;
+
     let mut s = TcpStream::connect(address.clone()).await?;
 
     println!(
@@ -55,13 +69,13 @@ async fn handshake(address: String, identity_path: String) -> Result<(), Error> 
         s.peer_addr()?,
     );
 
-    let decipher = connection(&mut s, identity).await?;
+    let mut decipher = connection(&mut s, identity).await?;
     let m = MetadataMessage::new(false, false);
-    write_message(&decipher, 0, &mut s, &[m]).await?;
-    let _ = read_message::<_, MetadataMessage>(&decipher, 0, &mut s).await?;
+    write_message(&mut decipher, &mut s, &[m]).await?;
+    let _ = read_message::<_, MetadataMessage>(&mut decipher, &mut s).await?;
     let m = AckMessage::Ack;
-    write_message(&decipher, 1, &mut s, &[m]).await?;
-    let _ = read_message::<_, AckMessage>(&decipher, 1, &mut s).await?;
+    write_message(&mut decipher, &mut s, &[m]).await?;
+    let _ = read_message::<_, AckMessage>(&mut decipher, &mut s).await?;
 
     Ok(())
 }
@@ -71,8 +85,8 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
     let version = NetworkVersion::new(chain_name, 0, 1);
     let connection_message = ConnectionMessage::new(
         0,
-        &hex::encode(identity.public_key()),
-        &hex::encode(identity.proof_of_work()),
+        &identity.public_key,
+        &identity.proof_of_work_stamp,
         rand::random::<[u8; 24]>().as_ref(),
         vec![version],
     );
@@ -96,16 +110,14 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
         .await?;
     let responder_chunk = BinaryChunk::try_from(chunk).unwrap();
 
-    let decipher = identity
-        .decipher(initiator_chunk.raw(), responder_chunk.raw())
-        .ok()
-        .unwrap();
-    Ok(decipher)
+    Ok(Decipher {
+        key: precompute(&identity.public_key, &identity.secret_key).map_err(|e| Error::Other(e.into()))?,
+        nonce: generate_nonces(initiator_chunk.raw(), responder_chunk.raw(), false),
+    })
 }
 
 async fn write_message<T, M>(
-    decipher: &Decipher,
-    counter: u64,
+    decipher: &mut Decipher,
     stream: &mut T,
     messages: &[M],
 ) -> Result<(), Error>
@@ -121,10 +133,10 @@ where
         let bytes = message.as_bytes()
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Encoding error"))?;
         for plain in bytes.chunks(CONTENT_LENGTH_MAX) {
-            let chunk = decipher
-                .encrypt(plain, NonceAddition::Initiator(counter))
+            let chunk = encrypt(plain, &decipher.nonce.local, &decipher.key)
                 .map_err(|e| Error::Other(format!("{:?}", e).into()))
                 .map(|v| BinaryChunk::from_content(v.as_ref()).unwrap())?;
+            decipher.nonce.local.increment();
             chunks.extend_from_slice(chunk.raw());
         }
     }
@@ -135,8 +147,7 @@ where
 }
 
 async fn read_message<T, M>(
-    decipher: &Decipher,
-    counter: u64,
+    decipher: &mut Decipher,
     stream: &mut T,
 ) -> Result<M, Error>
 where
@@ -153,8 +164,9 @@ where
         .read_exact(&mut chunk[..size])
         .await?;
 
-    let bytes = decipher.decrypt(&chunk[..size], NonceAddition::Responder(counter))
+    let bytes = decrypt(&chunk[..size], &decipher.nonce.remote, &decipher.key)
         .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
+    decipher.nonce.remote.increment();
 
     let message = M::from_bytes(bytes)
         .map_err(|e| Error::Other(format!("{:?}", e).into()))?;

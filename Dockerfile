@@ -38,9 +38,12 @@ RUN ./scripts/build_.rs 5.8.18
 
 FROM ubuntu:20.04
 
+RUN apt-get update && apt install -y curl
+
 WORKDIR /root/tezedge-firewall
 COPY --from=builder /root/tezedge-firewall/scripts/run.sh /root/tezedge-firewall/scripts/
-COPY --from=builder /root/tezedge-firewall/scripts/test_pow_reuse.sh /root/tezedge-firewall/scripts/
+COPY --from=builder /root/tezedge-firewall/scripts/test_bad_pow.sh /root/tezedge-firewall/scripts/
+COPY --from=builder /root/tezedge-firewall/scripts/wait_until.sh /root/tezedge-firewall/scripts/
 COPY --from=builder /root/tezedge-firewall/bin /root/tezedge-firewall/bin
 COPY --from=builder /root/tezedge-firewall/tests /root/tezedge-firewall/tests
 

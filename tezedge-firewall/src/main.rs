@@ -1,5 +1,3 @@
-//#![forbid(unsafe_code)]
-
 use std::{env, fs, io, net::{IpAddr, Ipv4Addr, SocketAddr}, os::unix::fs::PermissionsExt, path::Path, ptr, sync::Arc};
 use redbpf::{
     load::Loader,
@@ -58,6 +56,7 @@ where
         for event in events {
             match name.as_str() {
                 "events" => {
+                    // TODO: remove unsafe
                     let event = unsafe { ptr::read(event.as_ptr() as *const Event) };
 
                     let module = module.lock().await;

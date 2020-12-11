@@ -2,7 +2,10 @@ version: "3"
 
 services:
   firewall:
-    image: simplestakingcom/tezedge-firewall:v0.1.1
+    image: simplestakingcom/tezedge-firewall:v0.1.2
+    build: .
+    environment:
+      - RUST_BACKTRACE=1
     privileged: true
     entrypoint: ./scripts/run.sh -d eth0 --target=26.0
 
@@ -16,7 +19,8 @@ services:
     entrypoint: tezos-node run --rpc-addr 0.0.0.0:8732
 
   test_proof_of_work:
-    image: tezedge-firewall-test
+    image: simplestakingcom/tezedge-firewall:v0.1.2
+    build: .
     depends_on:
       - node
     entrypoint: sh -c "./scripts/wait_until.sh firewall:8732 && ./scripts/test_bad_pow.sh"
