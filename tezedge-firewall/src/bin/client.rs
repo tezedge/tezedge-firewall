@@ -15,15 +15,9 @@ struct Opts {
 
 #[derive(StructOpt)]
 enum Cmd {
-    Block {
-        addr: IpAddr,
-    },
-    Unblock {
-        addr: IpAddr,
-    },
-    Node {
-        port: u16,
-    },
+    Block { addr: IpAddr },
+    Unblock { addr: IpAddr },
+    Node { port: u16 },
 }
 
 #[tokio::main]
@@ -36,5 +30,8 @@ async fn main() {
         Cmd::Unblock { addr } => Command::Unblock(addr),
         Cmd::Node { port } => Command::FilterLocalPort(port),
     };
-    control.write_all(command.as_bytes().unwrap().as_ref()).await.unwrap();
+    control
+        .write_all(command.as_bytes().unwrap().as_ref())
+        .await
+        .unwrap();
 }

@@ -1,13 +1,14 @@
-use std::{net::{IpAddr, SocketAddr, AddrParseError}, io, string::ToString};
+use std::{
+    net::{IpAddr, SocketAddr, AddrParseError},
+    io,
+    string::ToString,
+};
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::Decoder;
 use bytes::{BytesMut, Buf};
 use tezos_encoding::{
     binary_reader::{BinaryReader, BinaryReaderError},
-    binary_writer,
-    de,
-    ser,
-    has_encoding,
+    binary_writer, de, ser, has_encoding,
     encoding::{Encoding, HasEncoding, Tag, TagMap, Field},
 };
 
@@ -40,7 +41,9 @@ impl Command {
             CommandInner::Block(s) => Command::Block(s.parse().map_err(Error::AddrParse)?),
             CommandInner::Unblock(s) => Command::Unblock(s.parse().map_err(Error::AddrParse)?),
             CommandInner::FilterLocalPort(p) => Command::FilterLocalPort(p),
-            CommandInner::FilterRemoteAddr(s) => Command::FilterRemoteAddr(s.parse().map_err(Error::AddrParse)?),
+            CommandInner::FilterRemoteAddr(s) => {
+                Command::FilterRemoteAddr(s.parse().map_err(Error::AddrParse)?)
+            },
             CommandInner::Disconnected(Disconnected {
                 address,
                 public_key,
@@ -86,10 +89,14 @@ has_encoding!(CommandInner, COMMAND_ENCODING, {
             Tag::new(0x02, "Unblock", Encoding::String),
             Tag::new(0x03, "FilterLocalPort", Encoding::Uint16),
             Tag::new(0x04, "FilterRemoteAddr", Encoding::String),
-            Tag::new(0x05, "Disconnected", Encoding::Obj(vec![
-                Field::new("address", Encoding::String),
-                Field::new("public_key", Encoding::sized(32, Encoding::Bytes)),
-            ])),
+            Tag::new(
+                0x05,
+                "Disconnected",
+                Encoding::Obj(vec![
+                    Field::new("address", Encoding::String),
+                    Field::new("public_key", Encoding::sized(32, Encoding::Bytes)),
+                ]),
+            ),
         ]),
     )
 });
@@ -107,7 +114,9 @@ impl Decoder for CommandDecoder {
                 src.advance(len);
                 de::from_value(&value)
                     .map_err(|e| match e {
-                        BinaryReaderError::DeserializationError { error } => Error::Deserialization(error),
+                        BinaryReaderError::DeserializationError { error } => {
+                            Error::Deserialization(error)
+                        },
                         _ => unreachable!(),
                     })
                     .and_then(Command::from_inner)
@@ -118,17 +127,20 @@ impl Decoder for CommandDecoder {
                 self.decode(&mut data)
             },
             Err(BinaryReaderError::Underflow { .. }) => Ok(None),
-            Err(BinaryReaderError::DeserializationError { error }) => 
-                Err(Error::Deserialization(error)),
-            Err(BinaryReaderError::UnsupportedTag { tag }) =>
-                Err(Error::WrongTag(tag as u8)),
+            Err(BinaryReaderError::DeserializationError { error }) => {
+                Err(Error::Deserialization(error))
+            },
+            Err(BinaryReaderError::UnsupportedTag { tag }) => Err(Error::WrongTag(tag as u8)),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{net::{Ipv4Addr, IpAddr}, convert::TryFrom};
+    use std::{
+        net::{Ipv4Addr, IpAddr},
+        convert::TryFrom,
+    };
     use bytes::BytesMut;
     use tokio_util::codec::Decoder;
     use super::{CommandDecoder, Command};
@@ -137,30 +149,39 @@ mod tests {
     fn basic() {
         let mut data = vec![1, 0, 0, 0, 9];
         data.extend_from_slice(b"127.0.0.1");
-    
+
         // correct
         let mut b = BytesMut::from(data.as_slice());
         let c = CommandDecoder.decode(&mut b);
-        assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        assert_eq!(
+            c.unwrap().unwrap(),
+            Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+        );
         assert_eq!(b.as_ref(), b"");
-    
+
         // overflow
         data.extend_from_slice(b"overflow");
         let mut b = BytesMut::from(data.as_slice());
         let c = CommandDecoder.decode(&mut b);
-        assert_eq!(c.unwrap().unwrap(), Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        assert_eq!(
+            c.unwrap().unwrap(),
+            Command::Block(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+        );
         assert_eq!(b.as_ref(), b"overflow");
-    
+
         let mut data = vec![1, 0, 0, 0, 9];
         data.extend_from_slice(b"127.0.0");
-    
+
         // underflow
         let mut b = BytesMut::from(data.as_slice());
         let c = CommandDecoder.decode(&mut b);
         assert!(c.unwrap().is_none());
-        assert_eq!(hex::encode(b.as_ref()), format!("0100000009{}", hex::encode("127.0.0")));
+        assert_eq!(
+            hex::encode(b.as_ref()),
+            format!("0100000009{}", hex::encode("127.0.0"))
+        );
     }
-    
+
     #[test]
     fn disconnected() {
         let mut data = vec![5, 0, 0, 0, 20];
@@ -171,7 +192,13 @@ mod tests {
 
         let mut b = BytesMut::from(data.as_slice());
         let c = CommandDecoder.decode(&mut b);
-        assert_eq!(c.unwrap().unwrap(), Command::Disconnected(addr.parse().unwrap(), <&[u8; 32]>::try_from(pk).unwrap().clone()));
+        assert_eq!(
+            c.unwrap().unwrap(),
+            Command::Disconnected(
+                addr.parse().unwrap(),
+                <&[u8; 32]>::try_from(pk).unwrap().clone()
+            )
+        );
         assert_eq!(b.as_ref(), b"");
     }
 }

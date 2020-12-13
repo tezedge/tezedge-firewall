@@ -1,11 +1,18 @@
-use std::{env, fs, io, net::{IpAddr, Ipv4Addr, SocketAddr}, os::unix::fs::PermissionsExt, path::Path, ptr, sync::Arc};
-use redbpf::{
-    load::Loader,
-    xdp::Flags,
-    HashMap,
-    Module,
+use std::{
+    env, fs, io,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    os::unix::fs::PermissionsExt,
+    path::Path,
+    ptr,
+    sync::Arc,
 };
-use tokio::{signal, net::UnixListener, stream::{StreamExt, Stream}, sync::Mutex};
+use redbpf::{load::Loader, xdp::Flags, HashMap, Module};
+use tokio::{
+    signal,
+    net::UnixListener,
+    stream::{StreamExt, Stream},
+    sync::Mutex,
+};
 use tokio_util::codec::Framed;
 use slog::Drain;
 use structopt::StructOpt;
@@ -23,11 +30,7 @@ struct Opts {
         help = "Interface name to attach the firewall"
     )]
     device: String,
-    #[structopt(
-        short,
-        long,
-        help = "Blacklist an IP, currently only v4 supported",
-    )]
+    #[structopt(short, long, help = "Blacklist an IP, currently only v4 supported")]
     blacklist: Vec<String>,
     #[structopt(short, long, default_value = "26.0")]
     target: f64,
@@ -64,20 +67,51 @@ where
                         let ip = event.pair.remote.ipv4;
                         match &event.event {
                             EventInner::ReceivedPow(b) => {
-                                slog::info!(log, "Received proof of work: {}", hex::encode(b.as_ref()));
+                                slog::info!(
+                                    log,
+                                    "Received proof of work: {}",
+                                    hex::encode(b.as_ref())
+                                );
                                 match check_proof_of_work(b, target) {
-                                    Ok(()) => slog::info!(log, "Proof of work is valid, complexity: {}", target),
-                                    Err(()) => block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, log),
+                                    Ok(()) => slog::info!(
+                                        log,
+                                        "Proof of work is valid, complexity: {}",
+                                        target
+                                    ),
+                                    Err(()) => block_ip(
+                                        &map,
+                                        IpAddr::V4(Ipv4Addr::from(ip)),
+                                        BlockingReason::BadProofOfWork,
+                                        log,
+                                    ),
                                 }
                             },
                             EventInner::NotEnoughBytesForPow => {
                                 slog::info!(log, "Received proof of work too short");
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::BadProofOfWork, log)
+                                block_ip(
+                                    &map,
+                                    IpAddr::V4(Ipv4Addr::from(ip)),
+                                    BlockingReason::BadProofOfWork,
+                                    log,
+                                )
                             },
-                            EventInner::BlockedAlreadyConnected { already_connected, try_connect } => {
-                                slog::info!(log, "Already connected: {:?}, try connect: {:?}", already_connected, try_connect);
-                                block_ip(&map, IpAddr::V4(Ipv4Addr::from(ip)), BlockingReason::AlreadyConnected, log)
-                            }
+                            EventInner::BlockedAlreadyConnected {
+                                already_connected,
+                                try_connect,
+                            } => {
+                                slog::info!(
+                                    log,
+                                    "Already connected: {:?}, try connect: {:?}",
+                                    already_connected,
+                                    try_connect
+                                );
+                                block_ip(
+                                    &map,
+                                    IpAddr::V4(Ipv4Addr::from(ip)),
+                                    BlockingReason::AlreadyConnected,
+                                    log,
+                                )
+                            },
                         }
                     });
                 },
@@ -87,7 +121,12 @@ where
     }
 }
 
-fn block_ip<'a>(map: &HashMap<'a, [u8; 4], u32>, ip: IpAddr, reason: BlockingReason, log: &slog::Logger) {
+fn block_ip<'a>(
+    map: &HashMap<'a, [u8; 4], u32>,
+    ip: IpAddr,
+    reason: BlockingReason,
+    log: &slog::Logger,
+) {
     // TODO: store reason somewhere in userspace
     slog::info!(log, "Block {}, reason: {:?}", ip, reason);
     match ip {
@@ -134,9 +173,11 @@ fn ensure_socket_permissions(socket_path: &Path, log: &slog::Logger) -> Result<(
         slog::info!(log, "Changing permission for socket";
                    "socket_path" => socket_path.as_os_str().to_str().unwrap(),
                    "perms" => format!("{:o} -> {:o}", metadata.permissions().mode() & 0o777, REQUIRED_PERMS));
-        let file = std::ffi::CString::new(
-            socket_path.as_os_str().to_str().unwrap()
-        ).expect(&format!("Failed to convert socket_path: {} to CString", socket_path.as_os_str().to_str().unwrap()));
+        let file =
+            std::ffi::CString::new(socket_path.as_os_str().to_str().unwrap()).expect(&format!(
+                "Failed to convert socket_path: {} to CString",
+                socket_path.as_os_str().to_str().unwrap()
+            ));
 
         unsafe {
             let _ = libc::chmod(file.as_ptr(), REQUIRED_PERMS as u32);
@@ -148,7 +189,12 @@ fn ensure_socket_permissions(socket_path: &Path, log: &slog::Logger) -> Result<(
 
 #[tokio::main]
 async fn main() {
-    let Opts { device, blacklist, target, socket } = Opts::from_args();
+    let Opts {
+        device,
+        blacklist,
+        target,
+        socket,
+    } = Opts::from_args();
 
     let log = logger();
 
@@ -183,7 +229,10 @@ async fn main() {
         let socket_path = Path::new(&socket);
         if let Err(e) = remove_socket_path(socket_path) {
             slog::error!(log, "Failed to remove old file for unix domain socket"; "reason" => format!("{}", e));
-            panic!("Failed to remove old file for unix domain socket, reason: {}", e)
+            panic!(
+                "Failed to remove old file for unix domain socket, reason: {}",
+                e
+            )
         }
 
         // run socket listener
@@ -191,7 +240,11 @@ async fn main() {
 
         if let Err(e) = ensure_socket_permissions(&socket_path, &log) {
             slog::error!(log, "Failed to set file permissions for unix domain socket"; "reason" => format!("{}", e), "socket_path" => socket_path.as_os_str().to_str().unwrap());
-            panic!("Failed to set file permissions for unix domain socket: \"{}\", reason: {}", socket_path.as_os_str().to_str().unwrap(), e)
+            panic!(
+                "Failed to set file permissions for unix domain socket: \"{}\", reason: {}",
+                socket_path.as_os_str().to_str().unwrap(),
+                e
+            )
         }
 
         slog::info!(log, "Listening commands on unix domain socket"; "socket_path" => socket_path.as_os_str().to_str().unwrap());
@@ -214,20 +267,14 @@ async fn main() {
                     };
                     slog::info!(log, "Received command: \"{:?}\"", command);
                     match command {
-                        Command::Block(ip) => {
-                            with_map_ref(&module, "blacklist", |map| {
-                                block_ip(&map, ip, BlockingReason::EventFromTezedge, &log)
-                            })
-                        },
+                        Command::Block(ip) => with_map_ref(&module, "blacklist", |map| {
+                            block_ip(&map, ip, BlockingReason::EventFromTezedge, &log)
+                        }),
                         Command::Unblock(ip) => {
-                            with_map_ref(&module, "blacklist", |map| {
-                                unblock_ip(map, ip)
-                            })
+                            with_map_ref(&module, "blacklist", |map| unblock_ip(map, ip))
                         },
                         Command::FilterLocalPort(port) => {
-                            with_map_ref::<_, u16, u32>(&module, "node", |map| {
-                                map.set(port, 0)
-                            })
+                            with_map_ref::<_, u16, u32>(&module, "node", |map| map.set(port, 0))
                         },
                         Command::FilterRemoteAddr(SocketAddr::V4(a)) => {
                             with_map_ref::<_, Endpoint, u32>(&module, "pending_peers", |map| {

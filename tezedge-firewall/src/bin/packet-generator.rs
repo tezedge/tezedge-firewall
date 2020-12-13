@@ -1,11 +1,16 @@
-use std::{io::{self, Read}, convert::TryFrom, fs::File};
+use std::{
+    io::{self, Read},
+    convert::TryFrom,
+    fs::File,
+};
 use structopt::StructOpt;
-use tokio::{net::TcpStream, io::{AsyncWriteExt, AsyncReadExt}};
+use tokio::{
+    net::TcpStream,
+    io::{AsyncWriteExt, AsyncReadExt},
+};
 use tezos_messages::p2p::{
     encoding::{
-        connection::ConnectionMessage,
-        version::NetworkVersion,
-        metadata::MetadataMessage,
+        connection::ConnectionMessage, version::NetworkVersion, metadata::MetadataMessage,
         ack::AckMessage,
     },
     binary_message::{BinaryMessage, BinaryChunk},
@@ -57,8 +62,7 @@ async fn handshake(address: String, identity_path: String) -> Result<(), Error> 
     let mut identity_file = File::open(identity_path.clone())?;
     let mut identity_json = String::new();
     identity_file.read_to_string(&mut identity_json)?;
-    let identity = Identity::from_json(&identity_json)
-        .map_err(|e| Error::Other(e.into()))?;
+    let identity = Identity::from_json(&identity_json).map_err(|e| Error::Other(e.into()))?;
 
     let mut s = TcpStream::connect(address.clone()).await?;
 
@@ -94,24 +98,19 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
         .as_bytes()
         .map_err(|e| Error::Other(e.into()))?;
     let initiator_chunk = BinaryChunk::from_content(chunk.as_ref()).unwrap();
-    stream
-        .write_all(initiator_chunk.raw())
-        .await?;
+    stream.write_all(initiator_chunk.raw()).await?;
 
     let mut size_buf = [0; 2];
-    stream
-        .read_exact(size_buf.as_mut())
-        .await?;
+    stream.read_exact(size_buf.as_mut()).await?;
     let size = u16::from_be_bytes(size_buf) as usize;
     let mut chunk = vec![0; size + 2];
     chunk[..2].clone_from_slice(size_buf.as_ref());
-    stream
-        .read_exact(&mut chunk[2..])
-        .await?;
+    stream.read_exact(&mut chunk[2..]).await?;
     let responder_chunk = BinaryChunk::try_from(chunk).unwrap();
 
     Ok(Decipher {
-        key: precompute(&identity.public_key, &identity.secret_key).map_err(|e| Error::Other(e.into()))?,
+        key: precompute(&identity.public_key, &identity.secret_key)
+            .map_err(|e| Error::Other(e.into()))?,
         nonce: generate_nonces(initiator_chunk.raw(), responder_chunk.raw(), false),
     })
 }
@@ -125,12 +124,13 @@ where
     T: Unpin + AsyncWriteExt,
     M: BinaryMessage,
 {
-    pub const CONTENT_LENGTH_MAX: usize =
-        tezos_messages::p2p::binary_message::CONTENT_LENGTH_MAX - crypto::crypto_box::BOX_ZERO_BYTES;
+    pub const CONTENT_LENGTH_MAX: usize = tezos_messages::p2p::binary_message::CONTENT_LENGTH_MAX
+        - crypto::crypto_box::BOX_ZERO_BYTES;
 
     let mut chunks = Vec::new();
     for message in messages {
-        let bytes = message.as_bytes()
+        let bytes = message
+            .as_bytes()
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Encoding error"))?;
         for plain in bytes.chunks(CONTENT_LENGTH_MAX) {
             let chunk = encrypt(plain, &decipher.nonce.local, &decipher.key)
@@ -140,36 +140,26 @@ where
             chunks.extend_from_slice(chunk.raw());
         }
     }
-    stream
-        .write_all(chunks.as_ref())
-        .await?;
+    stream.write_all(chunks.as_ref()).await?;
     Ok(())
 }
 
-async fn read_message<T, M>(
-    decipher: &mut Decipher,
-    stream: &mut T,
-) -> Result<M, Error>
+async fn read_message<T, M>(decipher: &mut Decipher, stream: &mut T) -> Result<M, Error>
 where
     T: Unpin + AsyncReadExt,
     M: BinaryMessage,
 {
     let mut size_buf = [0; 2];
-    stream
-        .read_exact(size_buf.as_mut())
-        .await?;
+    stream.read_exact(size_buf.as_mut()).await?;
     let size = u16::from_be_bytes(size_buf) as usize;
     let mut chunk = [0; 0x10000];
-    stream
-        .read_exact(&mut chunk[..size])
-        .await?;
+    stream.read_exact(&mut chunk[..size]).await?;
 
     let bytes = decrypt(&chunk[..size], &decipher.nonce.remote, &decipher.key)
         .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
     decipher.nonce.remote.increment();
 
-    let message = M::from_bytes(bytes)
-        .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
+    let message = M::from_bytes(bytes).map_err(|e| Error::Other(format!("{:?}", e).into()))?;
 
     Ok(message)
 }
