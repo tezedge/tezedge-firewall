@@ -2,12 +2,6 @@
 
 We have created a firewall for the TezEdge node that recognizes inbound traffic and filters it out before it enters the node itself. For this purpose, we’re utilizing an eXpress Data Path / Extended Berkeley Packet Filters (XDP/eBPF) module that acts as a layer outside of the node itself. This module allows us to run an application in the kernel that acts as a firewall, filtering incoming messages.
 
-The firewall acts as the TezEdge node’s first line of defense. When a peer first connects to a node, it begins the bootstrapping process, with the first message being the connection message.
-
-The connection message contains the peer’s public key and their proof of work. The proof of work is a small piece of code that is generated based on the associated public key. It is very hard to replicate the proof of work, but it is easy to check its validity. The firewall ensures that each connection starts with a _valid and unique_ (per connection) proof of work. If an adversary wants to start many connections, they must generate many unique proof of works, which makes a DDoS attack very expensive.
-
-The connection message is first subjected to these checks from the firewall. If it passes these checks, the message is allowed to pass into the node. If it does not, the message is rejected without any of its packets ever entering the kernel. This minimizes the node’s attack surface and considerably speeds up traffic filtering.
-
 For a more detailed description of the firewall, please read our [article](https://medium.com/simplestaking/integrating-an-ebpf-based-firewall-into-the-tezedge-node-with-multipass-validations-769d4c6ccd93?source=collection_home---6------1-----------------------).
 
 ## Docker compose
