@@ -29,6 +29,8 @@ cd tezedge-firewall
 
 ### Install
 
+The following instructions working well on Ubuntu 20.04.
+
 #### Dependencies
 
 ```
@@ -40,8 +42,8 @@ sudo apt install -y git wget gcc make libsodium-dev zlib1g-dev lsb-release softw
 
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup install nightly-2020-07-12 && rustup default nightly-2020-07-12
 source ~/.cargo/env
+rustup install nightly-2020-10-24 && rustup default nightly-2020-10-24
 ```
 
 #### LLVM 11
@@ -70,7 +72,7 @@ For example `sudo ~/.cargo/bin/tezedge-firewall --device enp4s0 -b 51.15.220.7 -
 
 Run it in docker, it should be privileged.
 ```
-docker run --privileged -d simplestakingcom/tezedge-firewall:0.1.3
+docker run --privileged -d simplestakingcom/tezedge-firewall:v0.1.3
 ```
 
 The file `/tmp/tezedge_firewall.sock` in the Docker container is a Unix domain socket.
