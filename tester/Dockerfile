@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as builder
+FROM ubuntu:20.04 as builder-t
 
 # deps
 ENV DEBIAN_FRONTEND='noninteractive'
@@ -22,5 +22,12 @@ RUN set -eux && \
 COPY . /root/tezedge-tester
 WORKDIR /root/tezedge-tester
 
-RUN apt install -y curl
-RUN cargo build
+RUN cargo test --test basic_docker || true
+
+FROM ubuntu:20.04
+
+WORKDIR /root/tezedge-tester
+COPY --from=builder-t /root/tezedge-tester/target/debug/deps/basic_docker-* ./
+COPY --from=builder-t /root/tezedge-tester/identity_*.json ./
+COPY --from=builder-t /root/tezedge-tester/wait_until.sh .
+RUN DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y curl && rm basic_docker-*.d && mv basic_docker-* test

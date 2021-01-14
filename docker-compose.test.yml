@@ -27,7 +27,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - node
-    entrypoint: sh -c "./wait_until.sh firewall:8732 && cargo test --test basic_docker -- basic_connect --nocapture"
+    entrypoint: sh -c "./wait_until.sh firewall:8732 && ./test basic_connect --nocapture"
 
   tester-block:
     image: simplestakingcom/tezedge-firewall-tester:v0.1.3
@@ -36,4 +36,4 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - tester-connect
-    entrypoint: sh -c "./wait_until.sh firewall:8732 && cargo test --test basic_docker -- basic_block --nocapture"
+    entrypoint: sh -c "./wait_until.sh firewall:8732 && ./test basic_block --nocapture"
