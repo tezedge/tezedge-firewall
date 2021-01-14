@@ -10,8 +10,9 @@ use tokio::{
 };
 use tezos_messages::p2p::{
     encoding::{
-        connection::ConnectionMessage, version::NetworkVersion, metadata::MetadataMessage,
-        ack::AckMessage,
+        connection::ConnectionMessage, version::NetworkVersion,
+        metadata::MetadataMessage,
+        //ack::AckMessage,
     },
     binary_message::{BinaryMessage, BinaryChunk},
 };
@@ -29,6 +30,7 @@ struct Opts {
     identity: String,
 }
 
+#[derive(Debug)]
 enum Error {
     Io(io::Error),
     Other(Box<dyn std::error::Error>),
@@ -40,17 +42,12 @@ impl From<io::Error> for Error {
     }
 }
 
-pub struct Decipher {
-    key: PrecomputedKey,
-    nonce: NoncePair,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let Opts { address, identity } = StructOpt::from_args();
 
     match handshake(address, identity).await {
-        Ok(()) => println!("Done handshake"),
+        Ok(()) => println!("The client successfully done handshake with the remote node"),
         Err(Error::Io(_)) => println!("The client cannot connect to the remote node"),
         Err(Error::Other(e)) => println!("{:?}", e),
     }
@@ -67,7 +64,7 @@ async fn handshake(address: String, identity_path: String) -> Result<(), Error> 
     let mut s = TcpStream::connect(address.clone()).await?;
 
     println!(
-        "try handshake, identity_path: {}, attacker_address: {}, node_address: {}",
+        "Try handshake, identity_path: {}, our address: {}, node address: {}...",
         identity_path,
         s.local_addr()?,
         s.peer_addr()?,
@@ -77,11 +74,16 @@ async fn handshake(address: String, identity_path: String) -> Result<(), Error> 
     let m = MetadataMessage::new(false, false);
     write_message(&mut decipher, &mut s, &[m]).await?;
     let _ = read_message::<_, MetadataMessage>(&mut decipher, &mut s).await?;
-    let m = AckMessage::Ack;
-    write_message(&mut decipher, &mut s, &[m]).await?;
-    let _ = read_message::<_, AckMessage>(&mut decipher, &mut s).await?;
+    //let m = AckMessage::Ack;
+    //write_message(&mut decipher, &mut s, &[m]).await?;
+    //let _ = read_message::<_, AckMessage>(&mut decipher, &mut s).await?;
 
     Ok(())
+}
+
+pub struct Decipher {
+    key: PrecomputedKey,
+    nonce: NoncePair,
 }
 
 async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Decipher, Error> {
@@ -109,7 +111,7 @@ async fn connection(stream: &mut TcpStream, identity: Identity) -> Result<Deciph
     let responder_chunk = BinaryChunk::try_from(chunk).unwrap();
 
     Ok(Decipher {
-        key: precompute(&identity.public_key, &identity.secret_key)
+        key: precompute(&hex::encode(&responder_chunk.raw()[4..36]), &identity.secret_key)
             .map_err(|e| Error::Other(e.into()))?,
         nonce: generate_nonces(initiator_chunk.raw(), responder_chunk.raw(), false),
     })
@@ -149,13 +151,13 @@ where
     T: Unpin + AsyncReadExt,
     M: BinaryMessage,
 {
-    let mut size_buf = [0; 2];
-    stream.read_exact(size_buf.as_mut()).await?;
-    let size = u16::from_be_bytes(size_buf) as usize;
-    let mut chunk = [0; 0x10000];
-    stream.read_exact(&mut chunk[..size]).await?;
+    let mut chunk_raw = [0; 0x10000];
+    let read = stream.read(chunk_raw.as_mut()).await?;
 
-    let bytes = decrypt(&chunk[..size], &decipher.nonce.remote, &decipher.key)
+    if read == 0 {
+        return Err(Error::Io(io::Error::new(io::ErrorKind::UnexpectedEof, "")));
+    }
+    let bytes = decrypt(&chunk_raw[2..read], &decipher.nonce.remote, &decipher.key)
         .map_err(|e| Error::Other(format!("{:?}", e).into()))?;
     decipher.nonce.remote.increment();
 

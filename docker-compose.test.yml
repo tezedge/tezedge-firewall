@@ -10,16 +10,24 @@ services:
     entrypoint: ./scripts/run.sh -d eth0 --target=26.0
 
   node:
-    image: simplestakingcom/tezedge:v0.7.2
+    image: tezos/tezos:v8.0
     depends_on:
       - firewall
     logging:
       driver: "none"
     network_mode: "service:firewall"
+    entrypoint: tezos-node run --rpc-addr 0.0.0.0:8732
 
-  test_proof_of_work:
+  test_bad_proof_of_work:
     image: simplestakingcom/tezedge-firewall:v0.1.2
     build: .
     depends_on:
       - node
-    entrypoint: sh -c "./scripts/wait_until.sh firewall:18732 && ./scripts/test_bad_pow.sh"
+    entrypoint: sh -c "./scripts/wait_until.sh firewall:8732 && ./scripts/test_bad_pow.sh"
+
+  test_good_proof_of_work:
+    image: simplestakingcom/tezedge-firewall:v0.1.2
+    build: .
+    depends_on:
+      - node
+    entrypoint: sh -c "./scripts/wait_until.sh firewall:8732 && ./scripts/test_good_pow.sh"
