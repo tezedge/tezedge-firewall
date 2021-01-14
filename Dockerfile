@@ -1,10 +1,10 @@
-FROM ubuntu:20.04
+FROM ubuntu:20.04 as builder
 
 # deps
 ENV DEBIAN_FRONTEND='noninteractive'
 RUN apt-get update && apt install -y \
     # common
-    git wget gcc kmod libsodium-dev make zlib1g-dev \
+    git wget curl gcc libsodium-dev make zlib1g-dev \
     # llvm
     lsb-release software-properties-common \
     # kernel
@@ -29,11 +29,19 @@ RUN wget https://apt.llvm.org/llvm.sh && \
     rm llvm.sh
 ENV LLVM_SYS_110_PREFIX=/usr/lib/llvm-11
 
+RUN cargo install cargo-script
+
 # firewall
 COPY . /root/tezedge-firewall
 WORKDIR /root/tezedge-firewall
 
-RUN ./scripts/build.sh 5.8.18
+RUN ./scripts/build_.rs 5.8.18
+
+FROM ubuntu:20.04
+
+WORKDIR /root/tezedge-firewall
+COPY --from=builder /root/tezedge-firewall/scripts/run.sh /root/tezedge-firewall/scripts/
+COPY --from=builder /root/tezedge-firewall/bin /root/tezedge-firewall/bin
 
 ARG COMPLEXITY=26.0
 ENV COMPLEXITY=${COMPLEXITY}

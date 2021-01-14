@@ -17,12 +17,12 @@ steps:
       - set -e
       - DEBIAN_FRONTEND='noninteractive' apt-get update && apt install -y libarchive-tools bc libelf-dev flex bison
       - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && ./llvm.sh 11 && rm llvm.sh
-      - ./scripts/build.sh $(uname -r)
-      - cargo install --path packet-generator --root .
+      - cargo install cargo-script
+      - ./scripts/build_.rs $(uname -r)
       - cp ./bin/* /tmp/binaries
       - cp ./scripts/wait_until.sh /tmp/binaries
       - cp ./scripts/ci_test.sh /tmp/binaries
-      - cp identity_*.json /tmp/identities
+      - cp tests/identity_*.json /tmp/identities
 
   - name: tezedge
     image: simplestakingcom/tezedge-ci-builder:latest

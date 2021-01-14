@@ -92,7 +92,9 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
         }
 
         // check if it is the first payload of the connection
-        let mut status = unsafe { status_map.get(&pair) }.cloned().unwrap_or(Status::empty());
+        let mut status = unsafe { status_map.get(&pair) }
+            .cloned()
+            .unwrap_or(Status::empty());
         if status.contains(Status::POW_SENT) {
             return Ok(XdpAction::Pass);
         }
@@ -127,7 +129,6 @@ pub fn firewall(ctx: XdpContext) -> XdpResult {
                     status.insert(Status::BLOCKED);
                 },
             }
-            
         } else {
             // first payload is too small, should not happens for tezos connection message
             event.event = EventInner::NotEnoughBytesForPow;
