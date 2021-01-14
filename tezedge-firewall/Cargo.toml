@@ -8,10 +8,6 @@ edition = "2018"
 name = "fw"
 path = "src/bin/client.rs"
 
-[[bin]]
-name = "packet-generator"
-path = "src/bin/packet-generator.rs"
-
 [build-dependencies]
 cargo-bpf = { version = "1.3", default-features = false, features = ["build"] }
 

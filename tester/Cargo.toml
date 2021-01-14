@@ -1,0 +1,13 @@
+[package]
+name = "tester"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vladislav.melnik@simplestaking.com>"]
+edition = "2018"
+
+[dependencies]
+rand = { version = "0.7" }
+hex = { version = "0.4" }
+tokio = { version = "0.2", features = ["signal", "time", "rt-core", "macros", "net", "stream", "sync", "io-util"] }
+crypto = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
+tezos_messages = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
+tezos_identity = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }

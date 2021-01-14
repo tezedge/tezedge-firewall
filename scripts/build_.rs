@@ -47,7 +47,7 @@ fn main() {
     Command::new("cargo")
         .env("KERNEL_SOURCE", format!("{}/linux-{}", env::var("PWD").unwrap(), version))
         .env_remove("KERNEL_VERSION")
-        .args(&["build", "-p", "tezedge-firewall", "--bin", "fw", "--bin", "packet-generator", "--release"])
+        .args(&["build", "-p", "tezedge-firewall", "--bin", "fw", "--release"])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap()
@@ -59,5 +59,4 @@ fn main() {
     fs::create_dir_all("bin").unwrap();
     fs::rename("target/release/tezedge-firewall", format!("./bin/firewall-{}", kernel_version)).unwrap();
     fs::rename("target/release/fw", "./bin/fw").unwrap();
-    fs::rename("target/release/packet-generator", "./bin/packet-generator").unwrap();
 }

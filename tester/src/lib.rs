@@ -3,7 +3,6 @@ use std::{
     convert::TryFrom,
     fs::File,
 };
-use structopt::StructOpt;
 use tokio::{
     net::TcpStream,
     io::{AsyncWriteExt, AsyncReadExt},
@@ -22,16 +21,8 @@ use crypto::{
 };
 use tezos_identity::Identity;
 
-#[derive(StructOpt)]
-struct Opts {
-    #[structopt(long, help = "Address at the tap interface")]
-    address: String,
-    #[structopt(long, help = "Identity json file")]
-    identity: String,
-}
-
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     Io(io::Error),
     Other(Box<dyn std::error::Error>),
 }
@@ -42,7 +33,7 @@ impl From<io::Error> for Error {
     }
 }
 
-#[tokio::main]
+/*#[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let Opts { address, identity } = StructOpt::from_args();
 
@@ -53,9 +44,9 @@ async fn main() -> Result<(), io::Error> {
     }
 
     Ok(())
-}
+}*/
 
-async fn handshake(address: String, identity_path: String) -> Result<(), Error> {
+pub async fn handshake(address: &str, identity_path: &str) -> Result<(), Error> {
     let mut identity_file = File::open(identity_path.clone())?;
     let mut identity_json = String::new();
     identity_file.read_to_string(&mut identity_json)?;
