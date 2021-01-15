@@ -29,7 +29,7 @@ cd tezedge-firewall
 
 ### Install
 
-The following instructions working well on Ubuntu 20.04.
+The following instructions have been tested to work well on Ubuntu 20.04.
 
 #### Dependencies
 
@@ -70,18 +70,18 @@ For example `sudo ~/.cargo/bin/tezedge-firewall --device enp4s0 -b 51.15.220.7 -
 
 ### Docker
 
-Run it in docker, it should be privileged.
+Run it in docker. It should be privileged.
 ```
 docker run --privileged -d simplestakingcom/tezedge-firewall:v0.1.3
 ```
 
 The file `/tmp/tezedge_firewall.sock` in the Docker container is a Unix domain socket.
-This socket is a communication channel with the TezEdge node.
+This socket is the communication channel with the TezEdge node.
 The TezEdge node must have access to this file.
 
 ## How can I know whether the firewall is working?
 
-The `ip` linux util can be used to list all the XDP programs running it. In Ubuntu, this is provided by the `iproute2` package. Install it if necessary. 
+The `ip` Linux util can be used to list all the XDP programs running it. In Ubuntu, this is provided by the `iproute2` package. Install it if necessary. 
 
 ```
 sudo apt install -y iproute2
