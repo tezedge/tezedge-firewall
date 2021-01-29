@@ -2,7 +2,7 @@ version: "3"
 
 services:
   firewall:
-    image: simplestakingcom/tezedge-firewall:v0.1.3
+    image: simplestakingcom/tezedge-firewall:v0.1.4
     build: .
     environment:
       - RUST_BACKTRACE=1
