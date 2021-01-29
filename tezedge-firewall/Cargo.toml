@@ -22,6 +22,8 @@ slog-async = { version = "2.5" }
 slog-term = { version = "2.6" }
 hex = { version = "0.4" }
 rand = { version = "0.7" }
+sudo = { version = "0.6" }
+procfs = { version = "0.9" }
 
 crypto = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
 tezos_messages = { tag = "v0.7.0", git = "https://github.com/simplestaking/tezedge" }
