@@ -199,7 +199,8 @@ pub async fn firewall(opts: Opts, log: slog::Logger) {
         env!("OUT_DIR"),
         "/target/bpf/programs/xdp_module/xdp_module.elf"
     ));
-    let mut loaded = Loader::load(code).expect("Error loading BPF program");
+    let mut loaded = Loader::load(code)
+        .unwrap_or_else(|| slog::error!(log, "Cannot loading BPF program, the docker container need to be privileged"));
     for kp in loaded.xdps_mut() {
         kp.attach_xdp(device.as_str(), Flags::Unset)
             .expect(&format!("Error attaching xdp program {}", kp.name()));
